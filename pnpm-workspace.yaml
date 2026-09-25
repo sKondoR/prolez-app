@@ -1,0 +1,16 @@
+packages:
+  - apps/*
+  - packages/*
+
+catalog:
+  typescript: ~6.0.3
+  zod: ^4.6.5
+  vitest: ^5.0.2
+  '@types/node': ^24.0.0
+  # ESLint 10 ещё не поддерживается eslint-plugin-react из eslint-config-expo
+  eslint: ^9.39.5
+  '@eslint/js': ^9.39.5
+  typescript-eslint: ^8.50.0
+
+onlyBuiltDependencies:
+  - esbuild

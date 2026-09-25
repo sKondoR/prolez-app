@@ -1,0 +1,31 @@
+{
+  "name": "prolez",
+  "private": true,
+  "packageManager": "pnpm@10.28.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "mobile": "pnpm --filter mobile start",
+    "android:prebuild": "pnpm --filter mobile exec expo prebuild -p android",
+    "android": "pnpm --filter mobile exec expo run:android --device Galaxy_S24_API34 --no-bundler",
+    "api": "pnpm --filter api dev",
+    "db:up": "docker compose -f infra/docker-compose.yml up -d",
+    "db:down": "docker compose -f infra/docker-compose.yml down",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.6.0",
+    "typescript": "catalog:"
+  },
+  "version": "1.0.0",
+  "dependencies": {
+    "expo": "~57.0.25",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
+  }
+}
