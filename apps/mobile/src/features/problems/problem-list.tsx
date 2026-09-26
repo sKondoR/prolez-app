@@ -65,9 +65,7 @@ export function ProblemList({
             </View>
             {row.draft && (
               <View style={styles.draft}>
-                <AppText variant="label" style={styles.draftText}>
-                  {t('marking.draftBadge')}
-                </AppText>
+                <AppText variant="caption">{t('marking.draftBadge')}</AppText>
               </View>
             )}
           </Pressable>
@@ -115,5 +113,4 @@ const styles = StyleSheet.create({
     borderColor: Colors.ink,
     justifyContent: 'center',
   },
-  draftText: { fontSize: 12, lineHeight: 15 },
 });

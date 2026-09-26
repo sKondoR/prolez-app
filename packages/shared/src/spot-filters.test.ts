@@ -65,7 +65,7 @@ describe('spotMatchesFilters', () => {
 describe('helpers', () => {
   it('lists grades in an inclusive range', () => {
     expect(gradesBetween('6A', '6C')).toEqual(['6A', '6B', '6C']);
-    expect(gradesBetween(undefined, '4B')).toEqual(['4A', '4B']);
+    expect(gradesBetween(undefined, '5B')).toEqual(['5A', '5B']);
   });
 
   it('checks a point against a bbox', () => {

@@ -50,7 +50,7 @@ export function OfflineQueue({ active }: { active: boolean }) {
             </View>
             <View style={styles.status} accessibilityLiveRegion="polite">
               <View style={[styles.dot, done && styles.dotDone]} />
-              <AppText style={styles.statusText}>
+              <AppText variant="caption" style={styles.statusText}>
                 {t(done ? 'about.queueSent' : 'about.queueWaiting')}
               </AppText>
             </View>
@@ -89,5 +89,5 @@ const styles = StyleSheet.create({
   status: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dot: { width: 8, height: 8, borderRadius: 4, borderWidth: 2, borderColor: Colors.ink },
   dotDone: { backgroundColor: Colors.ink },
-  statusText: { fontFamily: Fonts.textBold, fontSize: 12, lineHeight: 15 },
+  statusText: { fontFamily: Fonts.textBold },
 });

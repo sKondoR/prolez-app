@@ -5,6 +5,8 @@ import {
   type GeoJSONSourceRef,
   Layer,
   Map,
+  type MapRef,
+  type ViewPadding,
 } from '@maplibre/maplibre-react-native';
 import {
   type Bbox,
@@ -13,7 +15,7 @@ import {
   bboxContains,
   regions,
 } from '@prolez/shared';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
@@ -29,6 +31,14 @@ export interface SpotMapProps {
   zones: GeoJSON.FeatureCollection | undefined;
   externalPlaces: ExternalPlace[];
   onSpotPress: (spotId: string) => void;
+  /** Тап по карте мимо спотов и внешних мест: снимает выбор. */
+  onMapPress?: () => void;
+  /** Выбранный спот: крупнее, с графитовым кольцом. */
+  selectedId?: string;
+  /** Сколько карты снизу закрыто свёрнутой шторкой: над ней — атрибуция. */
+  bottomInset?: number;
+  /** Сколько карты снизу закроет превью спота: выбранную метку оттуда выводим. */
+  peekClearance?: number;
   onExternalPress: (place: ExternalPlace) => void;
   onViewportChange: (bbox: Bbox, zoom: number) => void;
   /** Отступ сверху под плавающие чипы: туда уходит компас. */
@@ -36,7 +46,7 @@ export interface SpotMapProps {
   /** Где пользователь по данным телефона — только мягкий сигнал, точность бывает плохой. */
   userLocation?: UserLocationFix;
   /** Новый `key` плавно переводит камеру в точку. */
-  focus?: { lon: number; lat: number; zoom: number; key: number };
+  focus?: { lon: number; lat: number; zoom: number; key: number; padding?: ViewPadding };
   /** Выбранный регион: его прямоугольник, прямоугольник подложки и `key` для перелёта камеры. */
   region: { code: string; bbox: Bbox; basemap: Bbox; key: number };
   /** Число спотов по регионам: счётчики на мелком масштабе. */
@@ -48,6 +58,11 @@ export interface SpotMapProps {
 /** Счётчики и названия регионов видны, пока карта мельче города. */
 const REGION_LABEL_MAX_ZOOM = 8;
 const REGION_PADDING = { top: 120, right: 24, bottom: 120, left: 24 };
+const NO_PADDING = { top: 0, right: 0, bottom: 0, left: 0 };
+/** С этого масштаба у меток спотов подписи-названия. */
+const SPOT_LABEL_MIN_ZOOM = 15;
+/** Зона нажатия метки — 48 dp, хотя сама метка 24. */
+const SPOT_HITBOX = { top: 24, right: 24, bottom: 24, left: 24 };
 
 export interface UserLocationFix {
   lon: number;
@@ -66,6 +81,10 @@ export function SpotMap({
   zones,
   externalPlaces,
   onSpotPress,
+  onMapPress,
+  selectedId,
+  bottomInset = 0,
+  peekClearance = 0,
   onExternalPress,
   onViewportChange,
   topInset = 0,
@@ -76,7 +95,9 @@ export function SpotMap({
   onRegionPress,
 }: SpotMapProps) {
   const mapStyle = useMapStyle(region.basemap);
+  const map = useRef<MapRef>(null);
   const camera = useRef<CameraRef>(null);
+  const [mapHeight, setMapHeight] = useState(0);
   const spotSource = useRef<GeoJSONSourceRef>(null);
 
   const spotFeatures = useMemo<GeoJSON.FeatureCollection>(
@@ -86,10 +107,10 @@ export function SpotMap({
         type: 'Feature',
         id: s.id,
         geometry: point(s.location.lon, s.location.lat),
-        properties: { id: s.id, dryInRain: s.dryInRain },
+        properties: { id: s.id, name: s.name, selected: s.id === selectedId },
       })),
     }),
-    [spots],
+    [spots, selectedId],
   );
 
   const externalFeatures = useMemo<GeoJSON.FeatureCollection>(
@@ -135,7 +156,13 @@ export function SpotMap({
 
   useEffect(() => {
     if (!focus) return;
-    camera.current?.easeTo({ center: [focus.lon, focus.lat], zoom: focus.zoom, duration: 600 });
+    camera.current?.easeTo({
+      center: [focus.lon, focus.lat],
+      zoom: focus.zoom,
+      // Отступ камеры в MapLibre запоминается — задаём его каждый раз явно.
+      padding: focus.padding ?? NO_PADDING,
+      duration: 600,
+    });
   }, [focus]);
 
   const userFeature = useMemo<GeoJSON.FeatureCollection>(
@@ -159,11 +186,14 @@ export function SpotMap({
 
   return (
     <Map
+      ref={map}
       style={styles.map}
+      onLayout={(e) => setMapHeight(e.nativeEvent.layout.height)}
+      onPress={() => onMapPress?.()}
       mapStyle={mapStyle}
       compass
       compassPosition={{ top: topInset, right: 12 }}
-      attributionPosition={{ bottom: 8, left: 8 }}
+      attributionPosition={{ bottom: bottomInset + 8, left: 8 }}
       logo={false}
       onRegionDidChange={({ nativeEvent }) =>
         onViewportChange(nativeEvent.bounds, nativeEvent.zoom)
@@ -334,6 +364,7 @@ export function SpotMap({
         cluster
         clusterRadius={40}
         clusterMaxZoom={14}
+        hitbox={SPOT_HITBOX}
         onPress={async (event) => {
           event.stopPropagation();
           const feature = event.nativeEvent.features[0];
@@ -345,6 +376,17 @@ export function SpotMap({
             camera.current?.easeTo({ center: [lon!, lat!], zoom: zoom ?? 14, duration: 400 });
           } else if (typeof props.id === 'string') {
             onSpotPress(props.id);
+            if (feature.geometry.type !== 'Point') return;
+            // Метка у нижнего края уйдёт под превью — сдвигаем карту, чтобы её было видно.
+            const [lon, lat] = feature.geometry.coordinates as [number, number];
+            const [, y] = (await map.current?.project([lon, lat])) ?? [0, 0];
+            if (y > mapHeight - peekClearance) {
+              camera.current?.easeTo({
+                center: [lon, lat],
+                padding: { ...NO_PADDING, bottom: peekClearance },
+                duration: 400,
+              });
+            }
           }
         }}
       >
@@ -368,19 +410,57 @@ export function SpotMap({
           }}
           paint={{ 'text-color': mapColors.tag }}
         />
+        {/* Подпись под метками: метка важнее и всегда поверх. Выбранный спот подписан первым. */}
+        <Layer
+          type="symbol"
+          id="spot-label"
+          minzoom={SPOT_LABEL_MIN_ZOOM}
+          filter={['!', ['has', 'point_count']]}
+          layout={{
+            'text-field': ['get', 'name'],
+            'text-font': ['Noto Sans Bold'],
+            'text-size': 12,
+            'text-max-width': 9,
+            'text-variable-anchor': ['left', 'right'],
+            'text-radial-offset': 1.6,
+            'text-justify': 'auto',
+            'symbol-sort-key': ['case', ['get', 'selected'], 0, 1],
+          }}
+          paint={{
+            'text-color': mapColors.ink,
+            'text-halo-color': mapColors.land,
+            'text-halo-width': 1.5,
+          }}
+        />
         {/* Метка спота — лаймовая краска с графитовым крестом, как отметка баллончиком. */}
         <Layer
           type="circle"
           id="spot-halo"
           filter={['!', ['has', 'point_count']]}
-          paint={{ 'circle-radius': 16, 'circle-color': mapColors.spot, 'circle-opacity': 0.32 }}
+          paint={{
+            'circle-radius': ['case', ['get', 'selected'], 20, 16],
+            'circle-color': mapColors.spot,
+            'circle-opacity': 0.32,
+          }}
+        />
+        {/* Выбранный спот — графитовое кольцо вокруг краски. */}
+        <Layer
+          type="circle"
+          id="spot-selected-ring"
+          filter={['all', ['!', ['has', 'point_count']], ['get', 'selected']]}
+          paint={{
+            'circle-radius': 20,
+            'circle-opacity': 0,
+            'circle-stroke-color': mapColors.ink,
+            'circle-stroke-width': 2.5,
+          }}
         />
         <Layer
           type="circle"
           id="spot-point"
           filter={['!', ['has', 'point_count']]}
           paint={{
-            'circle-radius': 12,
+            'circle-radius': ['case', ['get', 'selected'], 14, 12],
             'circle-color': mapColors.spot,
             'circle-stroke-color': mapColors.ink,
             'circle-stroke-width': 1.5,
@@ -393,7 +473,7 @@ export function SpotMap({
           layout={{
             'text-field': '×',
             'text-font': ['Noto Sans Bold'],
-            'text-size': 20,
+            'text-size': ['case', ['get', 'selected'], 23, 20],
             'text-allow-overlap': true,
             'text-ignore-placement': true,
           }}

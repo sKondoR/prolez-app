@@ -38,7 +38,7 @@ export function Chip({ label, selected = false, onPress, icon, badge, onMap = fa
       </AppText>
       {badge !== undefined && badge > 0 && (
         <View style={styles.badge}>
-          <AppText variant="label" tone="onInk" style={styles.badgeText}>
+          <AppText variant="caption" tone="onInk" style={styles.badgeText}>
             {badge}
           </AppText>
         </View>
@@ -69,5 +69,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { fontSize: 12, lineHeight: 14 },
+  badgeText: { lineHeight: 14 },
 });

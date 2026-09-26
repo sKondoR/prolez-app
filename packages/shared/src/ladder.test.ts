@@ -14,22 +14,24 @@ describe('grade scale', () => {
   it('orders grades by difficulty', () => {
     expect(compareGrades('6B', '6A')).toBeGreaterThan(0);
     expect(compareGrades('5C', '6A')).toBeLessThan(0);
-    expect(grades[0]).toBe('4A');
-    expect(grades.at(-1)).toBe('9C');
-    expect(grades).toHaveLength(18);
+    expect(grades[0]).toBe('5A');
+    expect(grades.at(-1)).toBe('8C');
+    expect(grades).toHaveLength(12);
   });
 
   it('has no plus subgrades at all', () => {
     expect(isGrade('5C+')).toBe(false);
     expect(isGrade('6A+')).toBe(false);
-    expect(isGrade('9C+')).toBe(false);
+    expect(isGrade('8C+')).toBe(false);
+    expect(isGrade('4C')).toBe(false);
+    expect(isGrade('9A')).toBe(false);
     expect(isGrade('6a')).toBe(false);
   });
 
   it('steps one subgrade up and stays at the top', () => {
     expect(nextGrade('6B')).toBe('6C');
     expect(nextGrade('5C')).toBe('6A');
-    expect(nextGrade('9C')).toBe('9C');
+    expect(nextGrade('8C')).toBe('8C');
   });
 });
 

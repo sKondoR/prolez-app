@@ -114,9 +114,7 @@ export function WallPhoto({ photo, problems, selectedKey, onSelect, editing }: W
 
       {photo.credit && !editing && (
         <View style={styles.credit} pointerEvents="none">
-          <AppText variant="label" style={styles.creditText}>
-            {photo.credit}
-          </AppText>
+          <AppText variant="caption">{photo.credit}</AppText>
         </View>
       )}
     </Pressable>
@@ -259,5 +257,4 @@ const styles = StyleSheet.create({
     borderRadius: Radius.tag,
     backgroundColor: Colors.tag,
   },
-  creditText: { fontSize: 12, lineHeight: 15 },
 });

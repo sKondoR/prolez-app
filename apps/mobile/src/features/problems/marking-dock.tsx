@@ -65,9 +65,9 @@ export function MarkingDock({
                   </AppText>
                 </View>
               )}
-              <AppText variant="label" style={[styles.toolText, { color: fg }]}>
+              <AppText variant="caption" style={[styles.toolText, { color: fg }]}>
                 {t(`marking.tool.${kind}`)}{' '}
-                <AppText variant="label" style={[styles.counter, { color: fg }]}>
+                <AppText variant="caption" style={[styles.counter, { color: fg }]}>
                   {counter}
                 </AppText>
               </AppText>
@@ -130,8 +130,8 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   toolActive: { backgroundColor: Colors.ink },
-  toolText: { fontFamily: Fonts.textBold, fontSize: 12, lineHeight: 15 },
-  counter: { fontSize: 12, lineHeight: 15, opacity: 0.75 },
+  toolText: { fontFamily: Fonts.textBold },
+  counter: { opacity: 0.75 },
   holdIcon: {
     width: 18,
     height: 18,

@@ -69,12 +69,19 @@ export const Type = {
     letterSpacing: -0.8,
     textTransform: 'uppercase',
   },
+  /**
+   * Имя собственное места (спот, скалодром): без капса и на всю ширину строки. Капсом
+   * длинные адреса Петербурга рвутся посреди слова.
+   */
+  name: { fontFamily: Fonts.displayBold, fontSize: 24, lineHeight: 28, letterSpacing: -0.5 },
   head: { fontFamily: Fonts.displayBold, fontSize: 20, lineHeight: 23, letterSpacing: -0.4 },
   title: { fontFamily: Fonts.textBold, fontSize: 17, lineHeight: 21 },
   body: { fontFamily: Fonts.text, fontSize: 16, lineHeight: 23 },
   bodyStrong: { fontFamily: Fonts.textBold, fontSize: 16, lineHeight: 20 },
   small: { fontFamily: Fonts.textMedium, fontSize: 14, lineHeight: 19 },
   label: { fontFamily: Fonts.textSemiBold, fontSize: 13, lineHeight: 16, letterSpacing: 0.1 },
+  /** Подпись поля, бейдж, кредит фото — мельче метки, тот же вес. */
+  caption: { fontFamily: Fonts.textSemiBold, fontSize: 12, lineHeight: 15, letterSpacing: 0.1 },
   button: {
     fontFamily: Fonts.displayBold,
     fontSize: 15,

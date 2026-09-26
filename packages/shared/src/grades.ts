@@ -4,10 +4,10 @@ export const disciplines = ['boulder', 'lead'] as const;
 export const disciplineSchema = z.enum(disciplines);
 export type Discipline = z.infer<typeof disciplineSchema>;
 
-// Одна французская шкала для боулдеринга и трудности, без плюсов: 4A … 9C.
+// Одна французская шкала для боулдеринга и трудности, без плюсов: 5 … 8.
 // Порядок в массиве и есть порядок сложности: индекс — «ступень лестницы».
 export const grades = [
-  ...[4, 5, 6, 7, 8, 9].flatMap((n) => ['A', 'B', 'C'].map((l) => `${n}${l}`)),
+  ...[5, 6, 7, 8].flatMap((n) => ['A', 'B', 'C'].map((l) => `${n}${l}`)),
 ] as const;
 
 export type Grade = (typeof grades)[number];

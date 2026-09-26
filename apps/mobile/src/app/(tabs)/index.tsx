@@ -1,17 +1,26 @@
 import {
   DEFAULT_REGION_CODE,
   type SpotFilters,
-  type SpotSummary,
   basemapBbox,
+  bboxContains,
   bboxIntersects,
   bboxWithin,
   findRegion,
   spotMatchesFilters,
 } from '@prolez/shared';
-import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  Alert,
+  Animated,
+  BackHandler,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/app-text';
@@ -21,8 +30,11 @@ import { Icon } from '@/components/icon';
 import { Snackbar, useSnackbar } from '@/components/snackbar';
 import { Colors, Radius, Shadow, Spacing } from '@/constants/theme';
 import { bandRangeLabel } from '@/features/map/grade-bands';
+import type { SheetMode } from '@/features/map/map-sheet';
 import { activeFilterCount, useMapStore } from '@/features/map/map-store';
-import { SpotMap } from '@/features/map/spot-map';
+import { type MapSpot, bboxCenter, nearestSpot, spotsInView } from '@/features/map/spot-list';
+import { SpotMap, type SpotMapProps } from '@/features/map/spot-map';
+import { SpotSheet } from '@/features/map/spot-sheet';
 import { useLocate } from '@/features/map/use-locate';
 import { useRegionCounts, useRegionSpots } from '@/features/regions/queries';
 import { useRegionStore } from '@/features/regions/region-store';
@@ -39,12 +51,18 @@ import { useOnline } from '@/lib/use-online';
 const CHIPS_BAND = 62;
 /** Мельче этого масштаба другие регионы показывают только счётчик спотов. */
 const OTHER_REGION_SPOTS_MIN_ZOOM = 8;
+/** Развёрнутый список занимает эту долю экрана карты: сверху остаётся видна карта. */
+const LIST_SHARE = 0.62;
+/** Масштаб, к которому карта приближает спот, выбранный в списке. */
+const SPOT_FOCUS_ZOOM = 15;
+/** Высота превью до первого замера: по ней карта выводит метку из-под шторки. */
+const PEEK_FALLBACK = 200;
 
 export default function MapScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { bbox, zoom, filters, layers, setFilters, setViewport } = useMapStore();
+  const { bbox, zoom, filters, layers, setFilters, resetFilters, setViewport } = useMapStore();
   const { code: regionCode, focusKey, chooseRegion } = useRegionStore();
   useRegionDetection();
   const online = useOnline();
@@ -59,7 +77,7 @@ export default function MapScreen() {
   const showOtherSpots = zoom >= OTHER_REGION_SPOTS_MIN_ZOOM && !bboxWithin(bbox, basemap);
   const otherSpots = useSpots(bbox, filters, showOtherSpots);
   const spots = useMemo(() => {
-    const byId = new Map<string, SpotSummary>();
+    const byId = new Map<string, MapSpot>();
     // Выключенный запрос держит прошлые точки (keepPreviousData) — их не показываем.
     for (const s of showOtherSpots ? (otherSpots.data ?? []) : []) byId.set(s.id, s);
     for (const s of regionSpots.data ?? []) {
@@ -78,16 +96,78 @@ export default function MapScreen() {
   const toggle = (patch: Partial<SpotFilters>) => setFilters({ ...filters, ...patch });
   const range = bandRangeLabel(filters);
 
+  // Шторка: свёрнута — счётчик, превью — выбранный спот, список — споты в кадре.
+  const [sheetMode, setSheetMode] = useState<SheetMode>('collapsed');
+  const [selectedId, setSelectedId] = useState<string>();
+  const [screenHeight, setScreenHeight] = useState(0);
+  const [sheetVisible] = useState(() => new Animated.Value(0));
+  const [sheetRest, setSheetRest] = useState({ collapsed: 0, peek: 0, current: 0 });
+  const [spotFocus, setSpotFocus] = useState<SpotMapProps['focus']>();
+
+  const inView = useMemo(() => spotsInView(spots, bbox), [spots, bbox]);
+  const selected = spots.find((s) => s.id === selectedId);
+  // Выбранный спот пропал с карты (фильтры, смена региона) — выбор снимается.
+  if (selectedId && !selected && regionSpots.data) setSelectedId(undefined);
+  const hiddenByFilters = useMemo(
+    () =>
+      (regionSpots.data ?? []).filter(
+        (s) => bboxContains(bbox, s.location) && !spotMatchesFilters(s, filters),
+      ).length,
+    [regionSpots.data, bbox, filters],
+  );
+  const nearest = inView.length === 0 ? nearestSpot(spots, bboxCenter(bbox)) : undefined;
+  const expandedHeight = Math.round(screenHeight * LIST_SHARE);
+  const peekClearance = (sheetRest.peek || PEEK_FALLBACK) + Spacing.four;
+
+  const changeSheet = useCallback((mode: SheetMode) => {
+    setSheetMode(mode);
+    if (mode === 'collapsed') setSelectedId(undefined);
+  }, []);
+  const selectSpot = (spot: MapSpot) => {
+    setSelectedId(spot.id);
+    setSheetMode('peek');
+    setSpotFocus({
+      lon: spot.location.lon,
+      lat: spot.location.lat,
+      zoom: Math.max(zoom, SPOT_FOCUS_ZOOM),
+      key: Date.now(),
+      padding: { top: 0, right: 0, left: 0, bottom: peekClearance },
+    });
+  };
+  // Камеру ведёт последнее событие: «Моё место» или выбор спота в списке.
+  const cameraFocus = !spotFocus || (focus && focus.key > spotFocus.key) ? focus : spotFocus;
+
+  // Системное «Назад» сначала сворачивает шторку: список → превью → свёрнута.
+  useFocusEffect(
+    useCallback(() => {
+      if (sheetMode === 'collapsed' && !selectedId) return;
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        changeSheet(sheetMode === 'list' && selectedId ? 'peek' : 'collapsed');
+        return true;
+      });
+      return () => sub.remove();
+    }, [sheetMode, selectedId, changeSheet]),
+  );
+
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={(e) => setScreenHeight(e.nativeEvent.layout.height)}>
       <SpotMap
         spots={spots}
         zones={zonesVisible ? zones.data : undefined}
         externalPlaces={layers.external ? (external.data ?? []) : []}
         topInset={insets.top + CHIPS_BAND}
         userLocation={fix}
-        focus={focus}
-        onSpotPress={(id) => router.push({ pathname: '/spot/[id]', params: { id } })}
+        focus={cameraFocus}
+        selectedId={selected?.id}
+        bottomInset={sheetRest.collapsed}
+        peekClearance={peekClearance}
+        onSpotPress={(id) => {
+          setSelectedId(id);
+          setSheetMode('peek');
+        }}
+        onMapPress={() => {
+          if (sheetMode !== 'collapsed' || selectedId) changeSheet('collapsed');
+        }}
         onExternalPress={(place) =>
           Alert.alert(
             place.name,
@@ -188,8 +268,21 @@ export default function MapScreen() {
         )}
       </SafeAreaView>
 
-      {/* Кнопки по правому краю, над нижней навигацией: центр карты свободен. */}
-      <View style={styles.fabs} pointerEvents="box-none">
+      {/* Кнопки по правому краю едут над шторкой и прячутся, когда список развёрнут. */}
+      <Animated.View
+        style={[
+          styles.fabs,
+          {
+            opacity: sheetVisible.interpolate({
+              inputRange: [expandedHeight * 0.6, Math.max(expandedHeight * 0.85, 1)],
+              outputRange: [1, 0],
+              extrapolate: 'clamp',
+            }),
+            transform: [{ translateY: Animated.multiply(sheetVisible, -1) }],
+          },
+        ]}
+        pointerEvents={sheetMode === 'list' ? 'none' : 'box-none'}
+      >
         <IconButton
           icon="layers"
           label={t('layers.title')}
@@ -203,9 +296,33 @@ export default function MapScreen() {
           onPress={locate}
           style={Shadow.float}
         />
-      </View>
+      </Animated.View>
 
-      <Snackbar message={snackbar.message} bottom={Spacing.four} />
+      {expandedHeight > 0 && (
+        <SpotSheet
+          mode={sheetMode}
+          expandedHeight={expandedHeight}
+          visible={sheetVisible}
+          spots={inView}
+          selected={selected}
+          userLocation={fix}
+          hiddenByFilters={hiddenByFilters}
+          nearest={nearest}
+          onModeChange={changeSheet}
+          onRest={(mode, height) =>
+            setSheetRest((prev) =>
+              prev.current === height && (mode === 'list' || prev[mode] === height)
+                ? prev
+                : { ...prev, current: height, ...(mode !== 'list' && { [mode]: height }) },
+            )
+          }
+          onSelect={selectSpot}
+          onOpen={(spot) => router.push({ pathname: '/spot/[id]', params: { id: spot.id } })}
+          onResetFilters={resetFilters}
+        />
+      )}
+
+      <Snackbar message={snackbar.message} bottom={sheetRest.current + Spacing.three} />
     </View>
   );
 }
@@ -254,5 +371,5 @@ const styles = StyleSheet.create({
     borderRadius: Radius.small,
     backgroundColor: Colors.accent,
   },
-  fabs: { position: 'absolute', right: Spacing.three, bottom: Spacing.six, gap: Spacing.two },
+  fabs: { position: 'absolute', right: Spacing.three, bottom: Spacing.three, gap: Spacing.two },
 });

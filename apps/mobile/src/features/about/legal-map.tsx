@@ -117,7 +117,7 @@ export function LegalMap() {
 
       {/* Подпись — обычным текстом, чтобы шрифт и масштаб совпадали с остальным экраном. */}
       <View style={styles.rejected}>
-        <AppText style={styles.rejectedTitle} tone="onInk">
+        <AppText variant="caption" style={styles.rejectedTitle} tone="onInk">
           {t('about.legalRejected')}
         </AppText>
         <AppText style={styles.rejectedNote}>{t('about.legalRejectedDistance')}</AppText>
@@ -137,6 +137,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.small,
     backgroundColor: Colors.ink,
   },
-  rejectedTitle: { fontFamily: Fonts.textBold, fontSize: 12, lineHeight: 15 },
+  rejectedTitle: { fontFamily: Fonts.textBold },
   rejectedNote: { fontFamily: Fonts.text, fontSize: 11, lineHeight: 14, color: '#D9DCD8' },
 });

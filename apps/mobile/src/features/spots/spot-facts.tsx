@@ -17,11 +17,12 @@ interface Fact {
   off?: boolean;
 }
 
-/** Название спота с диапазоном категорий, сетка атрибутов 2×2 и последний визит. */
+/** Название спота, под ним диапазон категорий, сетка атрибутов 2×2 и последний визит. */
 export function SpotFacts({ spot }: { spot: SpotDetail }) {
   const { t } = useTranslation();
 
   const surface = t(`spot.surface.${spot.surface}`);
+  const disciplines = spot.disciplines.map((d) => t(`discipline.${d}`)).join(' · ');
   const facts: Fact[] = (
     [
       { label: t('spot.fact.object'), value: t(`spot.objectType.${spot.objectType}`) },
@@ -49,35 +50,35 @@ export function SpotFacts({ spot }: { spot: SpotDetail }) {
 
   return (
     <View>
-      <View style={styles.head}>
-        <View style={styles.headName}>
-          <AppText variant="display" accessibilityRole="header">
-            {spot.name}
-          </AppText>
-          {spot.disciplines.length > 0 && (
-            <AppText variant="small" tone="muted">
-              {spot.disciplines.map((d) => t(`discipline.${d}`)).join(' · ')}
-            </AppText>
-          )}
-        </View>
-        {spot.gradeMin && (
-          <View style={styles.range}>
+      <AppText variant="name" accessibilityRole="header">
+        {spot.name}
+      </AppText>
+      {(spot.gradeMin || disciplines !== '') && (
+        <View style={styles.meta}>
+          {spot.gradeMin && (
             <AppText variant="grade" style={styles.rangeText}>
               {spot.gradeMin === spot.gradeMax
                 ? spot.gradeMin
                 : `${spot.gradeMin}–${spot.gradeMax}`}
             </AppText>
-            <AppText variant="label" tone="muted">
-              {t('spot.problems', { count: spot.problemCount })}
-            </AppText>
+          )}
+          <View style={styles.metaText}>
+            {spot.gradeMin && (
+              <AppText variant="label">{t('spot.problems', { count: spot.problemCount })}</AppText>
+            )}
+            {disciplines !== '' && (
+              <AppText variant="small" tone="muted">
+                {disciplines}
+              </AppText>
+            )}
           </View>
-        )}
-      </View>
+        </View>
+      )}
 
       <View style={styles.grid}>
         {facts.map((f) => (
           <View key={f.label} style={styles.fact}>
-            <AppText variant="label" tone="muted" style={styles.factLabel}>
+            <AppText variant="caption" tone="muted">
               {f.label}
             </AppText>
             <View style={styles.factValue}>
@@ -114,10 +115,14 @@ export function SpotFacts({ spot }: { spot: SpotDetail }) {
 }
 
 const styles = StyleSheet.create({
-  head: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.three },
-  headName: { flex: 1, gap: 6 },
-  range: { alignItems: 'flex-end', gap: Spacing.one, paddingTop: 2 },
+  meta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    marginTop: Spacing.three,
+  },
   rangeText: { fontSize: 34, lineHeight: 36 },
+  metaText: { flex: 1, gap: Spacing.half },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: Spacing.five },
   fact: {
     // Две колонки с зазором 6.
@@ -129,7 +134,6 @@ const styles = StyleSheet.create({
     borderRadius: Radius.tag,
     backgroundColor: Colors.tag,
   },
-  factLabel: { fontSize: 12, lineHeight: 15 },
   factValue: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Spacing.one },
   factValueText: { flexShrink: 1 },
   warnDot: {

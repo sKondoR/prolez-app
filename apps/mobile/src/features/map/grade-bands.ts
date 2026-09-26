@@ -7,10 +7,8 @@ export interface GradeBand {
   max: Grade;
 }
 
-// Фильтр грубее шкалы: четвёрки и пятёрки целиком, шестёрки и семёрки — по букве,
-// восьмёрка — всё от 8A и выше.
+// Фильтр грубее шкалы: пятёрки и восьмёрки целиком, шестёрки и семёрки — по букве.
 export const gradeBands: readonly GradeBand[] = [
-  { label: '4', min: '4A', max: '4C' },
   { label: '5', min: '5A', max: '5C' },
   { label: '6A', min: '6A', max: '6A' },
   { label: '6B', min: '6B', max: '6B' },
@@ -18,7 +16,7 @@ export const gradeBands: readonly GradeBand[] = [
   { label: '7A', min: '7A', max: '7A' },
   { label: '7B', min: '7B', max: '7B' },
   { label: '7C', min: '7C', max: '7C' },
-  { label: '8', min: '8A', max: '9C' },
+  { label: '8', min: '8A', max: '8C' },
 ];
 
 type GradeRange = Pick<SpotFilters, 'gradeMin' | 'gradeMax'>;
@@ -28,8 +26,8 @@ export function bandOf(grade: Grade): number {
   const index = gradeBands.findIndex(
     (b) => compareGrades(grade, b.min) >= 0 && compareGrades(grade, b.max) <= 0,
   );
-  // Ниже 4A шкалы нет, так что промах возможен только сверху.
-  return index === -1 ? gradeBands.length - 1 : index;
+  // Кнопки покрывают всю шкалу от 5A до 8C без пропусков.
+  return index;
 }
 
 /** Какие кнопки выделены: от `from` до `to` включительно, или ничего. */
