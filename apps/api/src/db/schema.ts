@@ -140,3 +140,19 @@ export const externalPlaces = pgTable('external_places', {
   url: text(),
   description: text(),
 });
+
+/**
+ * Регионы — субъекты РФ из OSM (`admin_level=4`, код ISO 3166-2). Контур упрощён до ~50 м:
+ * по нему определяется стартовый регион пользователя и считаются споты региона.
+ */
+export const regions = pgTable(
+  'regions',
+  {
+    /** Код ISO 3166-2, например `RU-SPE`. */
+    code: text().primaryKey(),
+    name: text().notNull(),
+    geom: anyGeometry().notNull(),
+    importedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('regions_geom_gist').using('gist', t.geom)],
+);

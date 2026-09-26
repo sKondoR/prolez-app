@@ -1,5 +1,8 @@
 import type { Bbox, SpotFilters } from '@prolez/shared';
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+
+import { kvStorage } from '@/lib/storage';
 
 interface MapState {
   filters: SpotFilters;
@@ -18,18 +21,28 @@ export const SPB_BBOX: Bbox = [29.42, 59.63, 30.76, 60.25];
 
 const round = (value: number) => Math.round(value * 500) / 500;
 
-export const useMapStore = create<MapState>()((set) => ({
-  filters: {},
-  // Слой запретных зон включён по умолчанию (IDEA.md: «Безопасность и закон»).
-  layers: { forbidden: true, external: true },
-  bbox: SPB_BBOX,
-  zoom: 10,
-  setFilters: (filters) => set({ filters }),
-  resetFilters: () => set({ filters: {} }),
-  toggleLayer: (layer) => set((s) => ({ layers: { ...s.layers, [layer]: !s.layers[layer] } })),
-  setViewport: ([w, s, e, n], zoom) =>
-    set({ bbox: [round(w), round(s), round(e), round(n)], zoom }),
-}));
+export const useMapStore = create<MapState>()(
+  persist(
+    (set) => ({
+      filters: {},
+      // Слой запретных зон включён по умолчанию (IDEA.md: «Безопасность и закон»).
+      layers: { forbidden: true, external: true },
+      bbox: SPB_BBOX,
+      zoom: 10,
+      setFilters: (filters) => set({ filters }),
+      resetFilters: () => set({ filters: {} }),
+      toggleLayer: (layer) => set((s) => ({ layers: { ...s.layers, [layer]: !s.layers[layer] } })),
+      setViewport: ([w, s, e, n], zoom) =>
+        set({ bbox: [round(w), round(s), round(e), round(n)], zoom }),
+    }),
+    {
+      // Видимая область не сохраняется: после перезапуска карта открывается на регионе.
+      name: 'map',
+      storage: createJSONStorage(() => kvStorage),
+      partialize: ({ filters, layers }) => ({ filters, layers }),
+    },
+  ),
+);
 
 export function activeFilterCount(filters: SpotFilters): number {
   return Object.values(filters).filter((v) => v !== undefined).length;

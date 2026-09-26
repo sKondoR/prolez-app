@@ -17,7 +17,7 @@ import { Icon, type IconName } from '@/components/icon';
 import { Colors, Fonts, Radius, Spacing } from '@/constants/theme';
 
 import { AboutHero } from './about-hero';
-import { ForbiddenSwatch, SpotPin } from './glyphs';
+import { ForbiddenSwatch, RoleFigure, SpotPin } from './glyphs';
 import { LegalMap } from './legal-map';
 import { OfflineQueue } from './offline-queue';
 
@@ -171,7 +171,8 @@ export function AboutScreen() {
           </AppText>
           <View style={styles.roles}>
             {(t('about.roles', { returnObjects: true }) as string[]).map((role, i) => (
-              <View key={role} style={[styles.role, i > 0 && styles.seam]}>
+              <View key={role} style={styles.role}>
+                <RoleFigure index={i} />
                 <AppText style={styles.roleText} numberOfLines={1} adjustsFontSizeToFit>
                   {role}
                 </AppText>
@@ -297,16 +298,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginTop: Spacing.five,
     marginHorizontal: -Spacing.four,
-    backgroundColor: Colors.concrete,
+    backgroundColor: Colors.field,
   },
   role: {
     flex: 1,
-    minHeight: 72,
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 10,
+    paddingTop: 26,
+    paddingBottom: 22,
     paddingHorizontal: Spacing.one,
   },
-  seam: { borderLeftWidth: 1.5, borderLeftColor: Colors.seam },
   roleText: {
     fontFamily: Fonts.displayBold,
     fontSize: 13,

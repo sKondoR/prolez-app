@@ -6,7 +6,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "mobile": "pnpm --filter mobile start",
+    "mobile": "cd apps/mobile && expo start --dev-client",
     "android:prebuild": "pnpm --filter mobile exec expo prebuild -p android",
     "android": "pnpm --filter mobile exec expo run:android --device Galaxy_S24_API34 --no-bundler",
     "api": "pnpm --filter api dev",

@@ -6,15 +6,21 @@ import {
   Layer,
   Map,
 } from '@maplibre/maplibre-react-native';
-import type { Bbox, ExternalPlace, SpotSummary } from '@prolez/shared';
+import {
+  type Bbox,
+  type ExternalPlace,
+  type SpotSummary,
+  bboxContains,
+  regions,
+} from '@prolez/shared';
 import { useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { Colors } from '@/constants/theme';
+import regionShapes from '@/features/regions/region-shapes.json';
 
 import { installMapLogHandler } from './map-logs';
 import { mapColors, useMapStyle } from './map-style';
-import { SPB_CENTER } from './map-store';
 
 installMapLogHandler();
 
@@ -31,7 +37,17 @@ export interface SpotMapProps {
   userLocation?: UserLocationFix;
   /** Новый `key` плавно переводит камеру в точку. */
   focus?: { lon: number; lat: number; zoom: number; key: number };
+  /** Выбранный регион: его прямоугольник, прямоугольник подложки и `key` для перелёта камеры. */
+  region: { code: string; bbox: Bbox; basemap: Bbox; key: number };
+  /** Число спотов по регионам: счётчики на мелком масштабе. */
+  regionCounts: Record<string, number>;
+  /** Тап по другому региону на простом фоне. */
+  onRegionPress: (code: string) => void;
 }
+
+/** Счётчики и названия регионов видны, пока карта мельче города. */
+const REGION_LABEL_MAX_ZOOM = 8;
+const REGION_PADDING = { top: 120, right: 24, bottom: 120, left: 24 };
 
 export interface UserLocationFix {
   lon: number;
@@ -55,8 +71,11 @@ export function SpotMap({
   topInset = 0,
   userLocation,
   focus,
+  region,
+  regionCounts,
+  onRegionPress,
 }: SpotMapProps) {
-  const mapStyle = useMapStyle();
+  const mapStyle = useMapStyle(region.basemap);
   const camera = useRef<CameraRef>(null);
   const spotSource = useRef<GeoJSONSourceRef>(null);
 
@@ -85,6 +104,34 @@ export function SpotMap({
     }),
     [externalPlaces],
   );
+
+  const regionLabels = useMemo<GeoJSON.FeatureCollection>(
+    () => ({
+      type: 'FeatureCollection',
+      features: regions.map((r) => ({
+        type: 'Feature',
+        id: r.code,
+        geometry: point(r.label[0], r.label[1]),
+        properties: {
+          code: r.code,
+          name: r.name,
+          spotCount: regionCounts[r.code] ?? 0,
+          selected: r.code === region.code,
+          // На подложке регионы подписывает сама карта — своя подпись только на пустом фоне.
+          onBasemap: bboxContains(region.basemap, { lon: r.label[0], lat: r.label[1] }),
+        },
+      })),
+    }),
+    [regionCounts, region.code, region.basemap],
+  );
+
+  // Регион сменился — камера переводится на его прямоугольник.
+  const { bbox: regionBbox, key: regionKey } = region;
+  useEffect(() => {
+    if (regionKey === 0) return;
+    camera.current?.fitBounds(regionBbox, { padding: REGION_PADDING, duration: 800 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- перелёт только по смене key
+  }, [regionKey]);
 
   useEffect(() => {
     if (!focus) return;
@@ -122,11 +169,85 @@ export function SpotMap({
         onViewportChange(nativeEvent.bounds, nativeEvent.zoom)
       }
     >
-      <Camera
-        ref={camera}
-        initialViewState={{ center: SPB_CENTER, zoom: 10 }}
-        maxBounds={[28.9, 59.4, 31.4, 61.2]}
-      />
+      {/* Без maxBounds: карта непрерывная, но подложка грузится только в регионе (map-style). */}
+      <Camera ref={camera} initialViewState={{ bounds: region.bbox, padding: REGION_PADDING }} />
+
+      {/* Контуры регионов из бандла: ориентир на бетонном фоне за пределами подложки. */}
+      <GeoJSONSource
+        id="regions"
+        data={regionShapes as GeoJSON.FeatureCollection}
+        onPress={(event) => {
+          const code = event.nativeEvent.features[0]?.properties?.code;
+          if (typeof code === 'string' && code !== region.code) onRegionPress(code);
+        }}
+      >
+        {/* Почти прозрачная заливка ловит тапы по региону. */}
+        <Layer
+          type="fill"
+          id="region-hit"
+          paint={{ 'fill-color': mapColors.ink, 'fill-opacity': 0.01 }}
+        />
+        <Layer
+          type="line"
+          id="region-outline"
+          paint={{
+            'line-color': mapColors.regionLine,
+            'line-width': 1,
+            // Контуры упрощены для бандла: на городском масштабе они спорили бы с подложкой.
+            'line-opacity': ['interpolate', ['linear'], ['zoom'], 7, 0.6, 9, 0],
+          }}
+        />
+      </GeoJSONSource>
+
+      <GeoJSONSource id="region-labels" data={regionLabels}>
+        <Layer
+          type="symbol"
+          id="region-name"
+          maxzoom={REGION_LABEL_MAX_ZOOM}
+          filter={['!', ['get', 'onBasemap']]}
+          layout={{
+            'text-field': ['get', 'name'],
+            'text-font': ['Noto Sans Bold'],
+            'text-size': 11,
+            'text-transform': 'uppercase',
+            'text-letter-spacing': 0.08,
+            'text-max-width': 8,
+            'text-offset': [0, 1.6],
+            'text-anchor': 'top',
+          }}
+          paint={{
+            'text-color': mapColors.ink,
+            'text-opacity': 0.7,
+            'text-halo-color': mapColors.outside,
+            'text-halo-width': 1.5,
+          }}
+        />
+        <Layer
+          type="circle"
+          id="region-count-dot"
+          maxzoom={REGION_LABEL_MAX_ZOOM}
+          filter={['all', ['>', ['get', 'spotCount'], 0], ['!', ['get', 'selected']]]}
+          paint={{
+            'circle-radius': 15,
+            'circle-color': mapColors.ink,
+            'circle-stroke-color': mapColors.spot,
+            'circle-stroke-width': 2,
+          }}
+        />
+        <Layer
+          type="symbol"
+          id="region-count"
+          maxzoom={REGION_LABEL_MAX_ZOOM}
+          filter={['all', ['>', ['get', 'spotCount'], 0], ['!', ['get', 'selected']]]}
+          layout={{
+            'text-field': ['to-string', ['get', 'spotCount']],
+            'text-font': ['Noto Sans Bold'],
+            'text-size': 12,
+            'text-allow-overlap': true,
+          }}
+          paint={{ 'text-color': mapColors.tag }}
+        />
+      </GeoJSONSource>
 
       {zones && (
         <GeoJSONSource id="forbidden-zones" data={zones}>

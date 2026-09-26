@@ -48,6 +48,19 @@ beforeAll(async () => {
   await insertSpot('Без проблем', 30.35, 60.05, false, true);
   await insertSpot('Далеко, вне bbox', 29.0, 61.0, false, false);
 
+  // Регионы-прямоугольники: «город» со спотами из BBOX и «область» с дальним спотом.
+  const insertRegion = (
+    code: string,
+    name: string,
+    [w, s, e, n]: [number, number, number, number],
+  ) =>
+    db.sql`
+    INSERT INTO regions (code, name, geom)
+    VALUES (${code}, ${name}, ST_Multi(ST_MakeEnvelope(${w}, ${s}, ${e}, ${n}, 4326)))`;
+  await insertRegion('RU-SPE', 'Санкт-Петербург', [30.0, 59.8, 30.6, 60.2]);
+  await insertRegion('RU-LEN', 'Ленинградская область', [28.5, 60.5, 29.5, 61.5]);
+  await insertRegion('RU-TA', 'Татарстан', [48, 54, 54, 57]);
+
   // Запретная зона: линия «моста» с буфером 50 м.
   await db.sql`
     INSERT INTO forbidden_zones (category, source, source_id, name, geom, zone)
@@ -194,5 +207,50 @@ describe('forbidden zones', () => {
     });
     const huge = await app.inject({ method: 'GET', url: '/forbidden-zones?bbox=29,59,31,61' });
     expect(huge.statusCode).toBe(400);
+  });
+});
+
+describe('regions', () => {
+  it('counts active spots per region', async () => {
+    const res = await app.inject({ method: 'GET', url: '/regions' });
+    expect(res.json()).toEqual([
+      { code: 'RU-LEN', spotCount: 1 },
+      { code: 'RU-SPE', spotCount: 3 },
+      { code: 'RU-TA', spotCount: 0 },
+    ]);
+  });
+
+  it('locates the region of a point and returns null outside all regions', async () => {
+    const inCity = await app.inject({ method: 'GET', url: '/regions/locate?lon=30.3&lat=60' });
+    expect(inCity.json()).toEqual({ code: 'RU-SPE' });
+    const atSea = await app.inject({ method: 'GET', url: '/regions/locate?lon=0&lat=0' });
+    expect(atSea.json()).toEqual({ code: null });
+  });
+
+  it('exports a federal city together with its oblast as full spot details', async () => {
+    const res = await app.inject({ method: 'GET', url: '/regions/RU-SPE/spots' });
+    expect(res.statusCode).toBe(200);
+    const spots = res.json() as { id: string; name: string; problems: unknown[] }[];
+    expect(spots.map((s) => s.name).sort()).toEqual([
+      'Без проблем',
+      'Далеко, вне bbox',
+      'Сухой боулдер',
+      'Трудность',
+    ]);
+    // Та же карточка, что у /spots/:id: разметка только на одобренных фото.
+    const detail = await app.inject({ method: 'GET', url: `/spots/${dryBoulderSpotId}` });
+    expect(spots.find((s) => s.id === dryBoulderSpotId)).toEqual(detail.json());
+  });
+
+  it('exports an oblast alone and nothing for an empty region', async () => {
+    const len = await app.inject({ method: 'GET', url: '/regions/RU-LEN/spots' });
+    expect(len.json().map((s: { name: string }) => s.name)).toEqual(['Далеко, вне bbox']);
+    const empty = await app.inject({ method: 'GET', url: '/regions/RU-TA/spots' });
+    expect(empty.json()).toEqual([]);
+  });
+
+  it('rejects malformed region codes', async () => {
+    const res = await app.inject({ method: 'GET', url: '/regions/spb/spots' });
+    expect(res.statusCode).toBe(400);
   });
 });

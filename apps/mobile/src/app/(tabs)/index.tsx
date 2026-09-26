@@ -1,5 +1,15 @@
-import type { SpotFilters } from '@prolez/shared';
+import {
+  DEFAULT_REGION_CODE,
+  type SpotFilters,
+  type SpotSummary,
+  basemapBbox,
+  bboxIntersects,
+  bboxWithin,
+  findRegion,
+  spotMatchesFilters,
+} from '@prolez/shared';
 import { useRouter } from 'expo-router';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,36 +24,65 @@ import { bandRangeLabel } from '@/features/map/grade-bands';
 import { activeFilterCount, useMapStore } from '@/features/map/map-store';
 import { SpotMap } from '@/features/map/spot-map';
 import { useLocate } from '@/features/map/use-locate';
+import { useRegionCounts, useRegionSpots } from '@/features/regions/queries';
+import { useRegionStore } from '@/features/regions/region-store';
+import { useRegionDetection } from '@/features/regions/use-region-detection';
 import {
   canShowZones,
   useExternalPlaces,
   useForbiddenZones,
   useSpots,
 } from '@/features/spots/queries';
+import { useOnline } from '@/lib/use-online';
 
 /** Высота ленты чипов с отступами — под ней начинается компас карты. */
 const CHIPS_BAND = 62;
+/** Мельче этого масштаба другие регионы показывают только счётчик спотов. */
+const OTHER_REGION_SPOTS_MIN_ZOOM = 8;
 
 export default function MapScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { bbox, filters, layers, setFilters, setViewport } = useMapStore();
+  const { bbox, zoom, filters, layers, setFilters, setViewport } = useMapStore();
+  const { code: regionCode, focusKey, chooseRegion } = useRegionStore();
+  useRegionDetection();
+  const online = useOnline();
 
-  const spots = useSpots(bbox, filters);
-  const zones = useForbiddenZones(bbox, layers.forbidden);
+  const region = findRegion(regionCode) ?? findRegion(DEFAULT_REGION_CODE)!;
+  const basemap = basemapBbox(region.code) ?? region.bbox;
+  const inBasemap = bboxIntersects(bbox, basemap);
+
+  // Споты выбранного региона — целиком из выгрузки (есть и офлайн), фильтры — на клиенте.
+  // За пределами подложки — запрос по видимой области, только онлайн.
+  const regionSpots = useRegionSpots(region.code);
+  const showOtherSpots = zoom >= OTHER_REGION_SPOTS_MIN_ZOOM && !bboxWithin(bbox, basemap);
+  const otherSpots = useSpots(bbox, filters, showOtherSpots);
+  const spots = useMemo(() => {
+    const byId = new Map<string, SpotSummary>();
+    // Выключенный запрос держит прошлые точки (keepPreviousData) — их не показываем.
+    for (const s of showOtherSpots ? (otherSpots.data ?? []) : []) byId.set(s.id, s);
+    for (const s of regionSpots.data ?? []) {
+      if (spotMatchesFilters(s, filters)) byId.set(s.id, s);
+    }
+    return [...byId.values()];
+  }, [regionSpots.data, otherSpots.data, showOtherSpots, filters]);
+
+  const zonesVisible = layers.forbidden && canShowZones(bbox) && inBasemap;
+  const zones = useForbiddenZones(bbox, zonesVisible);
   const external = useExternalPlaces(layers.external);
+  const counts = useRegionCounts();
   const filterCount = activeFilterCount(filters);
   const snackbar = useSnackbar();
-  const { locate, locating, fix, focus } = useLocate(snackbar.show);
+  const { locate, locating, fix, focus } = useLocate(snackbar.show, basemap);
   const toggle = (patch: Partial<SpotFilters>) => setFilters({ ...filters, ...patch });
   const range = bandRangeLabel(filters);
 
   return (
     <View style={styles.container}>
       <SpotMap
-        spots={spots.data ?? []}
-        zones={layers.forbidden && canShowZones(bbox) ? zones.data : undefined}
+        spots={spots}
+        zones={zonesVisible ? zones.data : undefined}
         externalPlaces={layers.external ? (external.data ?? []) : []}
         topInset={insets.top + CHIPS_BAND}
         userLocation={fix}
@@ -62,6 +101,16 @@ export default function MapScreen() {
           )
         }
         onViewportChange={setViewport}
+        region={{ code: region.code, bbox: region.bbox, basemap, key: focusKey }}
+        regionCounts={counts.data ?? {}}
+        onRegionPress={(code) => {
+          const next = findRegion(code);
+          if (!next) return;
+          Alert.alert(t('regions.switchTitle', { name: next.name }), t('regions.switchBody'), [
+            { text: t('regions.cancel'), style: 'cancel' },
+            { text: t('regions.switch'), onPress: () => chooseRegion(code) },
+          ]);
+        }}
       />
 
       <SafeAreaView style={styles.top} pointerEvents="box-none" edges={['top']}>
@@ -72,6 +121,7 @@ export default function MapScreen() {
           contentContainerStyle={styles.chips}
           accessibilityLabel={t('map.filters')}
         >
+          <Chip onMap icon="map" label={region.name} onPress={() => router.push('/regions')} />
           <Chip
             onMap
             icon="sliders"
@@ -103,7 +153,16 @@ export default function MapScreen() {
           />
         </ScrollView>
 
-        {layers.forbidden && !canShowZones(bbox) && (
+        {!online && (
+          <View style={styles.pill}>
+            <Icon name="wifi-off" size={14} color={Colors.tag} />
+            <AppText variant="label" tone="onInk">
+              {t('map.offline')}
+            </AppText>
+          </View>
+        )}
+
+        {layers.forbidden && inBasemap && !canShowZones(bbox) && (
           <View style={styles.pill}>
             <View style={styles.zoneKey} />
             <AppText variant="label" tone="onInk">
@@ -112,10 +171,10 @@ export default function MapScreen() {
           </View>
         )}
 
-        {spots.isError && (
+        {online && regionSpots.isError && !regionSpots.data && (
           <Pressable
             accessibilityRole="button"
-            onPress={() => spots.refetch()}
+            onPress={() => regionSpots.refetch()}
             style={[styles.pill, styles.errorPill]}
           >
             <AppText variant="label" tone="onInk" style={styles.pillText}>

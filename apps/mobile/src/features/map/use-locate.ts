@@ -1,20 +1,13 @@
+import { type Bbox, bboxContains } from '@prolez/shared';
 import * as Location from 'expo-location';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { UserLocationFix } from './spot-map';
 
-/** Границы карты (как maxBounds камеры): за ними нам нечего показать. */
-const MAP_BOUNDS = { west: 28.9, south: 59.4, east: 31.4, north: 61.2 };
 const LOCATE_TIMEOUT_MS = 12_000;
 /** Позиция не старше минуты годится сразу, без ожидания спутников. */
 const LAST_KNOWN_MAX_AGE_MS = 60_000;
-
-const inBounds = ({ lon, lat }: { lon: number; lat: number }) =>
-  lon >= MAP_BOUNDS.west &&
-  lon <= MAP_BOUNDS.east &&
-  lat >= MAP_BOUNDS.south &&
-  lat <= MAP_BOUNDS.north;
 
 function withTimeout<T>(promise: Promise<T>, ms: number) {
   return Promise.race([
@@ -27,7 +20,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number) {
  * «Моё место». Геопозиция в СПб подавляется и подменяется, поэтому она только показывает,
  * где вы на карте, и никогда ничего не проверяет. Каждый результат сопровождается сообщением.
  */
-export function useLocate(notify: (text: string) => void) {
+export function useLocate(notify: (text: string) => void, basemap: Bbox) {
   const { t } = useTranslation();
   const [locating, setLocating] = useState(false);
   const [fix, setFix] = useState<UserLocationFix>();
@@ -57,12 +50,13 @@ export function useLocate(notify: (text: string) => void) {
         lat: position.coords.latitude,
         accuracy: position.coords.accuracy,
       };
-      if (!inBounds(next)) {
+      setFix(next);
+      setFocus({ lon: next.lon, lat: next.lat, zoom: 15, key: Date.now() });
+      // За пределами выбранного региона подложки нет: подсказываем сменить регион.
+      if (!bboxContains(basemap, next)) {
         notify(t('map.locate.outside'));
         return;
       }
-      setFix(next);
-      setFocus({ lon: next.lon, lat: next.lat, zoom: 15, key: Date.now() });
       notify(
         next.accuracy
           ? t('map.locate.found', { meters: Math.round(next.accuracy) })

@@ -55,8 +55,9 @@ export default function SpotScreen() {
       </Shell>
     );
   }
-  if (spot.isError) {
-    const notFound = spot.error instanceof ApiError && spot.error.status === 404;
+  const notFound = spot.error instanceof ApiError && spot.error.status === 404;
+  // Без сети обновление падает, но сохранённая карточка остаётся — показываем её.
+  if (spot.isError && (notFound || !spot.data)) {
     return (
       <Shell>
         <AppText variant="head" style={styles.centerText}>
@@ -73,7 +74,7 @@ export default function SpotScreen() {
       </Shell>
     );
   }
-  return <SpotDetails spot={spot.data} />;
+  return <SpotDetails spot={spot.data!} />;
 }
 
 /** Экран загрузки и ошибок: фон и кнопка «назад», чтобы из него всегда был выход. */

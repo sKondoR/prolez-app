@@ -10,6 +10,7 @@ import { z } from 'zod';
 import type { Db } from './db/client';
 import { mapLayerRoutes } from './routes/map-layers';
 import { photoRoutes } from './routes/photos';
+import { regionRoutes } from './routes/regions';
 import { spotRoutes } from './routes/spots';
 import type { PhotoStore } from './storage/photo-store';
 
@@ -53,6 +54,7 @@ export function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}) {
   if (deps.db) {
     app.register(spotRoutes(deps.db));
     app.register(mapLayerRoutes(deps.db));
+    app.register(regionRoutes(deps.db));
     if (deps.photos) app.register(photoRoutes(deps.db, deps.photos));
   }
 

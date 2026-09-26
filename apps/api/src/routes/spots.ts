@@ -5,7 +5,7 @@ import {
   type SpotDetail,
   type SpotSummary,
   compareGrades,
-  grades,
+  gradesBetween,
   isGrade,
   spotDetailSchema,
   spotSummarySchema,
@@ -47,15 +47,6 @@ function toSummary(row: SpotRow): SpotSummary {
     ...gradeRange(row.grades),
     problemCount: row.grades.length,
   };
-}
-
-/** Категории шкалы в диапазоне [min, max]; границы необязательны. */
-function gradesBetween(min: Grade | undefined, max: Grade | undefined): Grade[] {
-  return grades.filter(
-    (g) =>
-      (min === undefined || compareGrades(g, min) >= 0) &&
-      (max === undefined || compareGrades(g, max) <= 0),
-  );
 }
 
 const spotColumns = sql`
@@ -119,81 +110,98 @@ export function spotRoutes(db: Db): FastifyPluginAsyncZod {
         },
       },
       async (request, reply) => {
-        const [spot] = await db.execute<
-          SpotRow & {
-            description: string | null;
-            object_type: SpotDetail['objectType'];
-            surface: SpotDetail['surface'];
-            height_m: number | null;
-            lighting: boolean;
-            access: SpotDetail['access'];
-            last_visit_at: Date | null;
-          }
-        >(sql`
-          SELECT ${spotColumns}, s.description, s.object_type, s.surface, s.height_m, s.lighting,
-            s.access, s.last_visit_at
-          FROM spots s
-          LEFT JOIN problems p ON p.spot_id = s.id
-          WHERE s.id = ${request.params.id} AND s.status = 'active'
-          GROUP BY s.id`);
+        const [spot] = await loadSpotDetails(db, sql`s.id = ${request.params.id}`);
         if (!spot) return reply.code(404).send({ message: 'Spot not found' });
-
-        const problems = await db.execute<{
-          id: string;
-          name: string;
-          discipline: Discipline;
-          grade: Grade;
-          status: SpotDetail['problems'][number]['status'];
-          ascent_count: number;
-          photo_id: string | null;
-          marks: ProblemMark[];
-        }>(sql`
-          SELECT id, name, discipline, grade, status, ascent_count, photo_id, marks
-          FROM problems WHERE spot_id = ${spot.id}`);
-
-        const photos = await db.execute<{
-          id: string;
-          width: number;
-          height: number;
-          credit: string | null;
-        }>(sql`
-          SELECT id, width, height, credit FROM spot_photos
-          WHERE spot_id = ${spot.id} AND moderation = 'approved'
-          ORDER BY created_at`);
-        // Разметка без видимого фото бессмысленна: фото на модерации — как будто его нет.
-        const visiblePhotos = new Set(photos.map((ph) => ph.id));
-
-        return {
-          ...toSummary(spot),
-          description: spot.description,
-          objectType: spot.object_type,
-          surface: spot.surface,
-          heightM: spot.height_m,
-          lighting: spot.lighting,
-          access: spot.access,
-          lastVisitAt: spot.last_visit_at ? new Date(spot.last_visit_at).toISOString() : null,
-          photos: photos.map((ph) => ({
-            id: ph.id,
-            url: `/photos/${ph.id}`,
-            width: ph.width,
-            height: ph.height,
-            credit: ph.credit,
-          })),
-          problems: problems
-            .map((p) => ({
-              id: p.id,
-              name: p.name,
-              discipline: p.discipline,
-              grade: p.grade,
-              status: p.status,
-              ascentCount: p.ascent_count,
-              ...(p.photo_id && visiblePhotos.has(p.photo_id)
-                ? { photoId: p.photo_id, marks: p.marks }
-                : { photoId: null, marks: [] }),
-            }))
-            .sort((a, b) => compareGrades(a.grade, b.grade)),
-        };
+        return spot;
       },
     );
   };
+}
+
+type SpotDetailRow = SpotRow & {
+  description: string | null;
+  object_type: SpotDetail['objectType'];
+  surface: SpotDetail['surface'];
+  height_m: number | null;
+  lighting: boolean;
+  access: SpotDetail['access'];
+  last_visit_at: Date | null;
+};
+
+/**
+ * Полные карточки активных спотов, подходящих под условие `where` (алиас таблицы — `s`).
+ * Три запроса на любое число спотов: для одного спота и для выгрузки целого региона.
+ */
+export async function loadSpotDetails(db: Db, where: SQL): Promise<SpotDetail[]> {
+  const spots = await db.execute<SpotDetailRow>(sql`
+    SELECT ${spotColumns}, s.description, s.object_type, s.surface, s.height_m, s.lighting,
+      s.access, s.last_visit_at
+    FROM spots s
+    LEFT JOIN problems p ON p.spot_id = s.id
+    WHERE s.status = 'active' AND ${where}
+    GROUP BY s.id
+    ORDER BY s.name`);
+  if (spots.length === 0) return [];
+  const ids = spots.map((s) => s.id);
+
+  const problems = await db.execute<{
+    id: string;
+    spot_id: string;
+    name: string;
+    discipline: Discipline;
+    grade: Grade;
+    status: SpotDetail['problems'][number]['status'];
+    ascent_count: number;
+    photo_id: string | null;
+    marks: ProblemMark[];
+  }>(sql`
+    SELECT id, spot_id, name, discipline, grade, status, ascent_count, photo_id, marks
+    FROM problems WHERE spot_id IN ${ids}`);
+
+  const photos = await db.execute<{
+    id: string;
+    spot_id: string;
+    width: number;
+    height: number;
+    credit: string | null;
+  }>(sql`
+    SELECT id, spot_id, width, height, credit FROM spot_photos
+    WHERE spot_id IN ${ids} AND moderation = 'approved'
+    ORDER BY created_at`);
+  // Разметка без видимого фото бессмысленна: фото на модерации — как будто его нет.
+  const visiblePhotos = new Set(photos.map((ph) => ph.id));
+
+  return spots.map((spot) => ({
+    ...toSummary(spot),
+    description: spot.description,
+    objectType: spot.object_type,
+    surface: spot.surface,
+    heightM: spot.height_m,
+    lighting: spot.lighting,
+    access: spot.access,
+    lastVisitAt: spot.last_visit_at ? new Date(spot.last_visit_at).toISOString() : null,
+    photos: photos
+      .filter((ph) => ph.spot_id === spot.id)
+      .map((ph) => ({
+        id: ph.id,
+        url: `/photos/${ph.id}`,
+        width: ph.width,
+        height: ph.height,
+        credit: ph.credit,
+      })),
+    problems: problems
+      .filter((p) => p.spot_id === spot.id)
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        discipline: p.discipline,
+        grade: p.grade,
+        status: p.status,
+        ascentCount: p.ascent_count,
+        ...(p.photo_id && visiblePhotos.has(p.photo_id)
+          ? { photoId: p.photo_id, marks: p.marks }
+          : { photoId: null, marks: [] }),
+      }))
+      .sort((a, b) => compareGrades(a.grade, b.grade)),
+  }));
 }

@@ -1,6 +1,6 @@
 import type { SpotDetail } from '@prolez/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import '@/i18n';
@@ -115,6 +115,25 @@ describe('SpotScreen', () => {
     await fireEvent.press(screen.getByText('Разметить новую проблему'));
     expect(screen.getByText('Разметка проблемы')).toBeTruthy();
     expect(screen.getByText('Дальше')).toBeTruthy();
+  });
+
+  it('opens a spot of the selected region without network', async () => {
+    globalThis.fetch = jest.fn().mockRejectedValue(new TypeError('Network request failed'));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    // Выгрузка региона сделана час назад: карточка устарела, обновить её без сети нельзя.
+    client.setQueryData(['region-spots', 'RU-SPE'], [spot], { updatedAt: Date.now() - 3_600_000 });
+    await render(
+      <SafeAreaProvider initialMetrics={metrics}>
+        <QueryClientProvider client={client}>
+          <SpotScreen />
+        </QueryClientProvider>
+      </SafeAreaProvider>,
+    );
+    expect(await screen.findByText('Ланская ул., 3')).toBeTruthy();
+    expect(screen.getByText('Боулдеринг · проект')).toBeTruthy();
+    await waitFor(() => expect(client.getQueryState(['spot', SPOT_ID])?.status).toBe('error'));
+    expect(screen.queryByText('Не удалось загрузить спот')).toBeNull();
+    expect(screen.getByText('Ланская ул., 3')).toBeTruthy();
   });
 
   it('shows not found for 404', async () => {

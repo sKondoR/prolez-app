@@ -7,7 +7,7 @@ import { Onest_700Bold } from '@expo-google-fonts/onest/700Bold';
 import { SairaStencilOne_400Regular } from '@expo-google-fonts/saira-stencil-one/400Regular';
 import { Unbounded_700Bold } from '@expo-google-fonts/unbounded/700Bold';
 import { Unbounded_800ExtraBold } from '@expo-google-fonts/unbounded/800ExtraBold';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { useFonts } from 'expo-font';
 import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -15,6 +15,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 
 import { Colors, Radius } from '@/constants/theme';
+import { createQueryClient, persistOptions } from '@/lib/query-client';
 
 void SplashScreen.preventAutoHideAsync();
 
@@ -41,9 +42,7 @@ export default function RootLayout() {
     Onest_700Bold,
     SairaStencilOne_400Regular,
   });
-  const [queryClient] = useState(
-    () => new QueryClient({ defaultOptions: { queries: { staleTime: 60_000, retry: 2 } } }),
-  );
+  const [queryClient] = useState(createQueryClient);
   // Шрифты лежат в бандле; если загрузка всё же упала, показываем интерфейс системным шрифтом.
   const ready = fontsLoaded || fontError !== null;
 
@@ -54,7 +53,7 @@ export default function RootLayout() {
   if (!ready) return null;
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
       <ThemeProvider value={navigationTheme}>
         <StatusBar style="dark" />
         <Stack screenOptions={{ contentStyle: { backgroundColor: Colors.ground } }}>
@@ -63,6 +62,17 @@ export default function RootLayout() {
           <Stack.Screen name="spot/[id]" options={{ headerShown: false }} />
           <Stack.Screen
             name="filters"
+            options={{
+              presentation: 'formSheet',
+              sheetAllowedDetents: [0.85],
+              sheetGrabberVisible: true,
+              sheetCornerRadius: Radius.sheet,
+              headerShown: false,
+              contentStyle: { backgroundColor: Colors.tag },
+            }}
+          />
+          <Stack.Screen
+            name="regions"
             options={{
               presentation: 'formSheet',
               sheetAllowedDetents: [0.85],
@@ -85,6 +95,6 @@ export default function RootLayout() {
           />
         </Stack>
       </ThemeProvider>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }
