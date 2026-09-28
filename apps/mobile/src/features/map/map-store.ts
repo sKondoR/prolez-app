@@ -39,6 +39,13 @@ export const useMapStore = create<MapState>()(
       // Видимая область не сохраняется: после перезапуска карта открывается на регионе.
       name: 'map',
       storage: createJSONStorage(() => kvStorage),
+      // v1: фильтр «Сухо в дождь» убран из продукта — сохранённое значение отбрасываем.
+      version: 1,
+      migrate: (persisted) => {
+        const state = persisted as { filters?: Record<string, unknown> };
+        if (state.filters) delete state.filters.dryInRain;
+        return state as Pick<MapState, 'filters' | 'layers'>;
+      },
       partialize: ({ filters, layers }) => ({ filters, layers }),
     },
   ),

@@ -6,16 +6,7 @@ const idx = (label: string) => gradeBands.findIndex((b) => b.label === label);
 
 describe('grade bands', () => {
   it('covers the whole scale 5A … 8C without gaps', () => {
-    expect(gradeBands.map((b) => b.label)).toEqual([
-      '5',
-      '6A',
-      '6B',
-      '6C',
-      '7A',
-      '7B',
-      '7C',
-      '8',
-    ]);
+    expect(gradeBands.map((b) => b.label)).toEqual(['5', '6A', '6B', '6C', '7A', '7B', '7C', '8']);
     expect(bandOf('5B')).toBe(idx('5'));
     expect(bandOf('6A')).toBe(idx('6A'));
     expect(bandOf('7C')).toBe(idx('7C'));

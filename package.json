@@ -7,8 +7,8 @@
   },
   "scripts": {
     "mobile": "cd apps/mobile && expo start --dev-client",
-    "android:prebuild": "pnpm --filter mobile exec expo prebuild -p android",
-    "android": "pnpm --filter mobile exec expo run:android --device Galaxy_S24_API34 --no-bundler",
+    "android:prebuild": "cd apps/mobile && expo prebuild -p android",
+    "android": "cd apps/mobile && expo run:android --device Galaxy_S24_API34 --no-bundler",
     "api": "pnpm --filter api dev",
     "db:up": "docker compose -f infra/docker-compose.yml up -d",
     "db:down": "docker compose -f infra/docker-compose.yml down",

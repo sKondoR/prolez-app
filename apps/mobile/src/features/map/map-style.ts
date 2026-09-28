@@ -16,6 +16,7 @@ export const MAP_STYLE_URL =
 
 export const mapColors = {
   spot: Colors.accent,
+  externalGrey: Colors.externalGrey,
   ink: Colors.ink,
   tag: Colors.tag,
   forbidden: Colors.forbidden,

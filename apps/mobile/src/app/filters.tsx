@@ -2,7 +2,7 @@ import type { Discipline, SpotFilters } from '@prolez/shared';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/app-text';
@@ -84,22 +84,6 @@ export default function FiltersScreen() {
             onSelect={(i) => update({ needsPad: [undefined, true, false][i] })}
           />
         </Section>
-
-        <View style={styles.switchRow}>
-          <View style={styles.switchText}>
-            <AppText variant="bodyStrong">{t('filters.dryInRain')}</AppText>
-            <AppText variant="label" tone="muted">
-              {t('filters.dryInRainHint')}
-            </AppText>
-          </View>
-          <Switch
-            accessibilityLabel={t('filters.dryInRain')}
-            value={draft.dryInRain === true}
-            onValueChange={(v) => update({ dryInRain: v || undefined })}
-            trackColor={{ false: Colors.switchOff, true: Colors.ink }}
-            thumbColor={Colors.tag}
-          />
-        </View>
       </ScrollView>
 
       <View style={[styles.actions, { paddingBottom: Spacing.four + insets.bottom }]}>
@@ -196,8 +180,6 @@ const styles = StyleSheet.create({
   gradeIn: { backgroundColor: Colors.accent },
   gradeEdge: { backgroundColor: Colors.ink },
   gradeText: { ...Type.grade, fontSize: 18, lineHeight: 22 },
-  switchRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
-  switchText: { flex: 1, gap: 2 },
   actions: {
     flexDirection: 'row',
     gap: Spacing.two,

@@ -7,7 +7,7 @@ import { AppText } from '@/components/app-text';
 import { Button } from '@/components/button';
 import { GradeMark } from '@/components/grade-mark';
 import { Icon } from '@/components/icon';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Colors, Radius, Size, Spacing } from '@/constants/theme';
 
 import { MapSheet, type SheetMode } from './map-sheet';
 import { type MapSpot, approxDistance, distanceM, problemsByGrade } from './spot-list';
@@ -77,7 +77,7 @@ export function SpotSheet({
           {selected.name}
         </AppText>
         <View style={styles.open}>
-          <Icon name="arrow-right" size={22} color={Colors.tag} />
+          <Icon name="arrow-right" size={20} color={Colors.tag} />
         </View>
       </View>
       <ProblemGrades spot={selected} size={40} />
@@ -260,8 +260,8 @@ const styles = StyleSheet.create({
   },
   peekRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.three },
   open: {
-    width: 48,
-    height: 48,
+    width: Size.control,
+    height: Size.control,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: Radius.tag,

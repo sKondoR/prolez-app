@@ -4,6 +4,7 @@ import { compareGrades, grades, isGrade, nextGrade } from './grades';
 import {
   type ClimbedProblem,
   canPublish,
+  compareProblems,
   climbingLevel,
   problemStatus,
   publicationCeiling,
@@ -96,5 +97,24 @@ describe('confirmation', () => {
     expect(problemStatus(0, 0)).toBe('project');
     expect(problemStatus(2, 2)).toBe('unconfirmed');
     expect(problemStatus(1, 3)).toBe('confirmed');
+  });
+});
+
+describe('compareProblems', () => {
+  it('orders by grade, then confirmed before projects, then by name', () => {
+    const problems = [
+      { name: 'Трасса 2', grade: '6A', status: 'project' },
+      { name: 'Трасса 10', grade: '6A', status: 'confirmed' },
+      { name: 'Трасса 3', grade: '5C', status: 'project' },
+      { name: 'Трасса 1', grade: '6A', status: 'confirmed' },
+      { name: 'Трасса 4', grade: '6A', status: 'unconfirmed' },
+    ] as const;
+    expect([...problems].sort(compareProblems).map((p) => p.name)).toEqual([
+      'Трасса 3',
+      'Трасса 1',
+      'Трасса 10',
+      'Трасса 4',
+      'Трасса 2',
+    ]);
   });
 });

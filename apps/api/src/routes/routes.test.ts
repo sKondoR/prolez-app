@@ -12,7 +12,7 @@ let db: ReturnType<typeof createDb>;
 let app: ReturnType<typeof buildApp>;
 
 const BBOX = '30.2,59.9,30.5,60.1';
-let dryBoulderSpotId: string;
+let boulderSpotId: string;
 let approvedPhotoId: string;
 let pendingPhotoId: string;
 const photoBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
@@ -29,10 +29,10 @@ beforeAll(async () => {
     migrationsFolder: new URL('../../drizzle', import.meta.url).pathname.replace(/^\/(\w:)/, '$1'),
   });
 
-  const insertSpot = async (name: string, lon: number, lat: number, dry: boolean, pad: boolean) => {
+  const insertSpot = async (name: string, lon: number, lat: number, pad: boolean) => {
     const [row] = await db.sql<{ id: string }[]>`
-      INSERT INTO spots (name, location, object_type, surface, needs_pad, dry_in_rain)
-      VALUES (${name}, ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326), 'wall', 'asphalt', ${pad}, ${dry})
+      INSERT INTO spots (name, address, location, needs_pad)
+      VALUES (${name}, ${`Адрес: ${name}`}, ST_SetSRID(ST_MakePoint(${lon}, ${lat}), 4326), ${pad})
       RETURNING id`;
     return row!.id;
   };
@@ -40,13 +40,13 @@ beforeAll(async () => {
     INSERT INTO problems (spot_id, name, discipline, author_grade, grade)
     VALUES (${spotId}, ${`${discipline} ${grade}`}, ${discipline}, ${grade}, ${grade})`;
 
-  dryBoulderSpotId = await insertSpot('Сухой боулдер', 30.3, 60.0, true, false);
-  await insertProblem(dryBoulderSpotId, 'boulder', '6A');
-  await insertProblem(dryBoulderSpotId, 'boulder', '5B');
-  const leadSpot = await insertSpot('Трудность', 30.4, 59.95, false, true);
+  boulderSpotId = await insertSpot('Боулдер без пада', 30.3, 60.0, false);
+  await insertProblem(boulderSpotId, 'boulder', '6A');
+  await insertProblem(boulderSpotId, 'boulder', '5B');
+  const leadSpot = await insertSpot('Трудность', 30.4, 59.95, true);
   await insertProblem(leadSpot, 'lead', '6C');
-  await insertSpot('Без проблем', 30.35, 60.05, false, true);
-  await insertSpot('Далеко, вне bbox', 29.0, 61.0, false, false);
+  await insertSpot('Без проблем', 30.35, 60.05, true);
+  await insertSpot('Далеко, вне bbox', 29.0, 61.0, false);
 
   // Регионы-прямоугольники: «город» со спотами из BBOX и «область» с дальним спотом.
   const insertRegion = (
@@ -74,7 +74,7 @@ beforeAll(async () => {
   const insertPhoto = async (key: string, moderation: string) => {
     const [row] = await db.sql<{ id: string }[]>`
       INSERT INTO spot_photos (spot_id, s3_key, width, height, credit, moderation)
-      VALUES (${dryBoulderSpotId}, ${key}, 1200, 1800, 'Пример', ${moderation})
+      VALUES (${boulderSpotId}, ${key}, 1200, 1800, 'Пример', ${moderation})
       RETURNING id`;
     return row!.id;
   };
@@ -82,10 +82,10 @@ beforeAll(async () => {
   pendingPhotoId = await insertPhoto('spots/pending.jpg', 'pending');
   await db.sql`
     UPDATE problems SET photo_id = ${approvedPhotoId}, marks = ${JSON.stringify(marks)}::jsonb
-    WHERE spot_id = ${dryBoulderSpotId} AND grade = '6A'`;
+    WHERE spot_id = ${boulderSpotId} AND grade = '6A'`;
   await db.sql`
     UPDATE problems SET photo_id = ${pendingPhotoId}, marks = ${JSON.stringify(marks)}::jsonb
-    WHERE spot_id = ${dryBoulderSpotId} AND grade = '5B'`;
+    WHERE spot_id = ${boulderSpotId} AND grade = '5B'`;
 
   app = buildApp({ db: db.db, photos, pingDb: async () => {} });
 }, 180_000);
@@ -104,22 +104,22 @@ const getSpots = async (query = '') => {
 
 describe('GET /spots', () => {
   it('returns spots inside bbox only', async () => {
-    expect(await getSpots()).toEqual(['Без проблем', 'Сухой боулдер', 'Трудность']);
+    expect(await getSpots()).toEqual(['Без проблем', 'Боулдер без пада', 'Трудность']);
   });
 
   it('filters by spot attributes', async () => {
-    expect(await getSpots('&dryInRain=true')).toEqual(['Сухой боулдер']);
+    expect(await getSpots('&needsPad=false')).toEqual(['Боулдер без пада']);
     expect(await getSpots('&needsPad=true')).toEqual(['Без проблем', 'Трудность']);
   });
 
   it('filters by discipline and grade range of problems', async () => {
     expect(await getSpots('&discipline=lead')).toEqual(['Трудность']);
-    expect(await getSpots('&gradeMin=6A&gradeMax=6B')).toEqual(['Сухой боулдер']);
+    expect(await getSpots('&gradeMin=6A&gradeMax=6B')).toEqual(['Боулдер без пада']);
     expect(await getSpots('&discipline=boulder&gradeMin=6C')).toEqual([]);
   });
 
   it('summarises grades on the one shared scale', async () => {
-    const res = await app.inject({ method: 'GET', url: `/spots?bbox=${BBOX}&dryInRain=true` });
+    const res = await app.inject({ method: 'GET', url: `/spots?bbox=${BBOX}&needsPad=false` });
     expect(res.json()[0]).toMatchObject({ gradeMin: '5B', gradeMax: '6A', problemCount: 2 });
   });
 
@@ -133,13 +133,21 @@ describe('GET /spots', () => {
 
 describe('GET /spots/:id', () => {
   it('returns detail with problems sorted by grade', async () => {
-    const res = await app.inject({ method: 'GET', url: `/spots/${dryBoulderSpotId}` });
+    const res = await app.inject({ method: 'GET', url: `/spots/${boulderSpotId}` });
     expect(res.statusCode).toBe(200);
     expect(res.json().problems.map((p: { grade: string }) => p.grade)).toEqual(['5B', '6A']);
   });
 
+  it('returns address and note, and no removed attributes', async () => {
+    const body = (await app.inject({ method: 'GET', url: `/spots/${boulderSpotId}` })).json();
+    expect(body).toMatchObject({ address: 'Адрес: Боулдер без пада', note: null, needsPad: false });
+    for (const key of ['objectType', 'surface', 'heightM', 'access', 'dryInRain', 'lighting']) {
+      expect(body).not.toHaveProperty(key);
+    }
+  });
+
   it('returns approved photos and marks only on visible photos', async () => {
-    const res = await app.inject({ method: 'GET', url: `/spots/${dryBoulderSpotId}` });
+    const res = await app.inject({ method: 'GET', url: `/spots/${boulderSpotId}` });
     const body = res.json();
     expect(body.photos).toEqual([
       {
@@ -233,13 +241,13 @@ describe('regions', () => {
     const spots = res.json() as { id: string; name: string; problems: unknown[] }[];
     expect(spots.map((s) => s.name).sort()).toEqual([
       'Без проблем',
+      'Боулдер без пада',
       'Далеко, вне bbox',
-      'Сухой боулдер',
       'Трудность',
     ]);
     // Та же карточка, что у /spots/:id: разметка только на одобренных фото.
-    const detail = await app.inject({ method: 'GET', url: `/spots/${dryBoulderSpotId}` });
-    expect(spots.find((s) => s.id === dryBoulderSpotId)).toEqual(detail.json());
+    const detail = await app.inject({ method: 'GET', url: `/spots/${boulderSpotId}` });
+    expect(spots.find((s) => s.id === boulderSpotId)).toEqual(detail.json());
   });
 
   it('exports an oblast alone and nothing for an empty region', async () => {

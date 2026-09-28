@@ -4,25 +4,6 @@ import { disciplineSchema, gradeSchema } from './grades';
 import { problemStatuses } from './ladder';
 import { problemMarkSchema } from './marks';
 
-export const objectTypes = [
-  'wall',
-  'low_wall',
-  'parapet',
-  'retaining_wall',
-  'street_wall',
-  'other',
-] as const;
-export const surfaces = [
-  'asphalt',
-  'tiles',
-  'concrete',
-  'ground',
-  'grass',
-  'sand',
-  'rubber',
-] as const;
-export const accessKinds = ['always', 'gated_yard', 'daytime', 'seasonal'] as const;
-
 export const lonLatSchema = z.object({
   lon: z.number().min(-180).max(180),
   lat: z.number().min(-90).max(90),
@@ -47,7 +28,6 @@ export const spotFiltersSchema = z.object({
   discipline: disciplineSchema.optional(),
   gradeMin: gradeSchema.optional(),
   gradeMax: gradeSchema.optional(),
-  dryInRain: booleanParam.optional(),
   needsPad: booleanParam.optional(),
 });
 export type SpotFiltersQuery = z.input<typeof spotFiltersSchema>;
@@ -61,7 +41,6 @@ export const spotSummarySchema = z.object({
   location: lonLatSchema,
   disciplines: z.array(disciplineSchema),
   needsPad: z.boolean(),
-  dryInRain: z.boolean(),
   gradeMin: gradeSchema.nullable(),
   gradeMax: gradeSchema.nullable(),
   problemCount: z.number().int(),
@@ -96,12 +75,10 @@ export const spotPhotoSchema = z.object({
 export type SpotPhoto = z.infer<typeof spotPhotoSchema>;
 
 export const spotDetailSchema = spotSummarySchema.extend({
-  description: z.string().nullable(),
-  objectType: z.enum(objectTypes),
-  surface: z.enum(surfaces),
-  heightM: z.number().nullable(),
-  lighting: z.boolean(),
-  access: z.enum(accessKinds),
+  /** Адрес, как его написал автор спота. */
+  address: z.string().nullable(),
+  /** Примечание автора — свободный текст. */
+  note: z.string().nullable(),
   lastVisitAt: z.iso.datetime().nullable(),
   photos: z.array(spotPhotoSchema),
   problems: z.array(problemSummarySchema),

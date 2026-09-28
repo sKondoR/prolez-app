@@ -23,16 +23,11 @@ const spot = (overrides: Partial<SpotDetail> = {}): SpotDetail => ({
   location: { lon: 30.3, lat: 60 },
   disciplines: ['boulder'],
   needsPad: false,
-  dryInRain: true,
   gradeMin: '5B',
   gradeMax: '6A',
   problemCount: 2,
-  description: null,
-  objectType: 'wall',
-  surface: 'asphalt',
-  heightM: null,
-  lighting: false,
-  access: 'always',
+  address: null,
+  note: null,
   lastVisitAt: null,
   photos: [],
   problems: [problem('boulder', '5B'), problem('boulder', '6A')],
@@ -45,8 +40,7 @@ describe('spotMatchesFilters', () => {
   });
 
   it('checks spot attributes', () => {
-    expect(spotMatchesFilters(spot(), { dryInRain: true })).toBe(true);
-    expect(spotMatchesFilters(spot(), { dryInRain: false })).toBe(false);
+    expect(spotMatchesFilters(spot(), { needsPad: false })).toBe(true);
     expect(spotMatchesFilters(spot(), { needsPad: true })).toBe(false);
   });
 

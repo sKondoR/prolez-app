@@ -6,45 +6,29 @@ import { AppText } from '@/components/app-text';
 import { Icon } from '@/components/icon';
 import { Colors, Radius, Spacing } from '@/constants/theme';
 
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
 interface Fact {
   label: string;
   value: string;
-  /** Предупреждение — лаймовая точка у значения (например, нужен краш-пад). */
+  /** Предупреждение — лаймовая точка у значения (нужен краш-пад). */
   warn?: boolean;
-  /** Отсутствие удобства — значение приглушено. */
-  off?: boolean;
+  /** Свободный текст на всю ширину: набирается обычным, а не жирным. */
+  text?: boolean;
 }
 
-/** Название спота, под ним диапазон категорий, сетка атрибутов 2×2 и последний визит. */
+/** Название спота, под ним диапазон категорий, плитки «Адрес», «Краш-пад», «Примечание» и последний визит. */
 export function SpotFacts({ spot }: { spot: SpotDetail }) {
   const { t } = useTranslation();
 
-  const surface = t(`spot.surface.${spot.surface}`);
   const disciplines = spot.disciplines.map((d) => t(`discipline.${d}`)).join(' · ');
   const facts: Fact[] = (
     [
-      { label: t('spot.fact.object'), value: t(`spot.objectType.${spot.objectType}`) },
-      spot.heightM !== null
-        ? { label: t('spot.fact.height'), value: t('spot.height', { value: spot.heightM }) }
-        : null,
+      spot.address ? { label: t('spot.fact.address'), value: spot.address } : null,
       {
-        label: t('spot.fact.underfoot'),
-        value: capitalize(t(spot.needsPad ? 'spot.padNeeded' : 'spot.padOptional', { surface })),
+        label: t('spot.fact.pad'),
+        value: t(spot.needsPad ? 'spot.padNeeded' : 'spot.padOptional'),
         warn: spot.needsPad,
       },
-      {
-        label: t('spot.fact.evening'),
-        value: t(spot.lighting ? 'spot.lighting' : 'spot.noLighting'),
-        off: !spot.lighting,
-      },
-      { label: t('spot.fact.access'), value: t(`spot.access.${spot.access}`) },
-      {
-        label: t('spot.fact.rain'),
-        value: t(spot.dryInRain ? 'spot.dryInRain' : 'spot.wetInRain'),
-        off: !spot.dryInRain,
-      },
+      spot.note ? { label: t('spot.fact.note'), value: spot.note, text: true } : null,
     ] as (Fact | null)[]
   ).filter((f): f is Fact => f !== null);
 
@@ -77,17 +61,13 @@ export function SpotFacts({ spot }: { spot: SpotDetail }) {
 
       <View style={styles.grid}>
         {facts.map((f) => (
-          <View key={f.label} style={styles.fact}>
+          <View key={f.label} style={[styles.fact, f.text && styles.factWide]}>
             <AppText variant="caption" tone="muted">
               {f.label}
             </AppText>
             <View style={styles.factValue}>
               {f.warn && <View style={styles.warnDot} />}
-              <AppText
-                variant="bodyStrong"
-                tone={f.off ? 'muted' : 'ink'}
-                style={styles.factValueText}
-              >
+              <AppText variant={f.text ? 'body' : 'bodyStrong'} style={styles.factValueText}>
                 {f.value}
               </AppText>
             </View>
@@ -108,8 +88,6 @@ export function SpotFacts({ spot }: { spot: SpotDetail }) {
             : t('spot.neverVisited')}
         </AppText>
       </View>
-
-      {spot.description && <AppText style={styles.description}>{spot.description}</AppText>}
     </View>
   );
 }
@@ -134,6 +112,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.tag,
     backgroundColor: Colors.tag,
   },
+  factWide: { width: '100%' },
   factValue: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Spacing.one },
   factValueText: { flexShrink: 1 },
   warnDot: {
@@ -146,5 +125,4 @@ const styles = StyleSheet.create({
   },
   visit: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, marginTop: Spacing.three },
   visitText: { flex: 1 },
-  description: { marginTop: Spacing.four },
 });

@@ -4,7 +4,7 @@ import {
   type ProblemSummary,
   type SpotSummary,
   bboxContains,
-  compareGrades,
+  compareProblems,
 } from '@prolez/shared';
 
 /**
@@ -52,12 +52,9 @@ export function nearestSpot<T extends MapSpot>(spots: T[], point: LonLat): T | u
   return best;
 }
 
-/** Проблемы спота по возрастанию категории; при равной — сначала подтверждённые. */
+/** Проблемы спота в общем порядке: по категории, при равной — подтверждённые первыми. */
 export function problemsByGrade(problems: ProblemSummary[]): ProblemSummary[] {
-  const statusOrder = { confirmed: 0, unconfirmed: 1, project: 2 } as const;
-  return [...problems].sort(
-    (a, b) => compareGrades(a.grade, b.grade) || statusOrder[a.status] - statusOrder[b.status],
-  );
+  return [...problems].sort(compareProblems);
 }
 
 /**

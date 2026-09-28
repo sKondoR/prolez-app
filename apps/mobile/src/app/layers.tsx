@@ -1,9 +1,9 @@
 import { useTranslation } from 'react-i18next';
-import { ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, Switch, View } from 'react-native';
 
 import { AppText } from '@/components/app-text';
-import { Icon } from '@/components/icon';
 import { Colors, Radius, Spacing } from '@/constants/theme';
+import { externalMarks } from '@/features/map/external-marks';
 import { useMapStore } from '@/features/map/map-store';
 
 type LayerKey = 'forbidden' | 'external';
@@ -20,13 +20,17 @@ export default function LayersScreen() {
       </AppText>
       {(['forbidden', 'external'] as LayerKey[]).map((key, i) => (
         <View key={key} style={[styles.row, i > 0 && styles.divider]}>
-          {key === 'forbidden' ? (
-            <View style={styles.zoneKey} />
-          ) : (
-            <View style={styles.gymKey}>
-              <Icon name="trending-up" size={18} color={Colors.tag} />
-            </View>
-          )}
+          <View style={styles.key}>
+            {key === 'forbidden' ? (
+              <View style={styles.zoneKey} />
+            ) : (
+              // Две метки внахлёст, как на карте: скалодром за скальным районом.
+              <>
+                <Image source={externalMarks.gym} style={[styles.mark, styles.markBack]} />
+                <Image source={externalMarks.crag} style={styles.mark} />
+              </>
+            )}
+          </View>
           <View style={styles.text}>
             <AppText variant="bodyStrong">{t(`layers.${key}`)}</AppText>
             <AppText variant="label" tone="muted">
@@ -71,13 +75,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.forbidden,
     backgroundColor: 'rgba(255, 61, 168, 0.22)',
   },
-  gymKey: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.tag,
-    backgroundColor: Colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  key: { width: 44, height: 36, alignItems: 'center', justifyContent: 'center' },
+  mark: { position: 'absolute', left: 0, top: 0, width: 30, height: 30 },
+  markBack: { left: 14, top: 6 },
   note: { marginTop: Spacing.two },
 });

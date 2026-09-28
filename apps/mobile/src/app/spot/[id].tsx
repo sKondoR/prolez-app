@@ -1,4 +1,4 @@
-import type { ProblemSummary, SpotDetail } from '@prolez/shared';
+import { type ProblemSummary, type SpotDetail, compareProblems } from '@prolez/shared';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { TFunction } from 'i18next';
 import { StatusBar } from 'expo-status-bar';
@@ -112,7 +112,8 @@ function SpotDetails({ spot }: { spot: SpotDetail }) {
   const { rows, photoProblems } = useMemo(() => {
     const onPhoto: PhotoProblem[] = [];
     const list: ProblemRowData[] = [];
-    for (const p of spot.problems) {
+    // Порядок задаёт сервер, но офлайн-кэш мог сохраниться до сортировки — упорядочиваем сами.
+    for (const p of [...spot.problems].sort(compareProblems)) {
       const marked = photo !== undefined && p.photoId === photo.id && p.marks.length > 0;
       const n = marked ? onPhoto.length + 1 : undefined;
       if (n !== undefined) onPhoto.push({ key: p.id, n, name: p.name, marks: p.marks });
@@ -372,11 +373,8 @@ function AppBar({
 function Legend() {
   const { t } = useTranslation();
   return (
-    <View
-      style={styles.strip}
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-    >
+    // Один элемент для скринридера: метки на фото озвучиваются, легенда объясняет их обозначения.
+    <View style={styles.strip} accessible>
       <View style={styles.legendRow}>
         <View style={styles.legendItem}>
           <HandGlyph size={16} color={Colors.tag} />

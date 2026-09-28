@@ -20,20 +20,15 @@ jest.mock('expo-router', () => ({
 
 const spot: SpotDetail = {
   id: SPOT_ID,
-  name: 'Ланская ул., 3',
+  name: 'Стенка на Ланской',
   location: { lon: 30.32, lat: 59.99 },
   disciplines: ['boulder'],
   needsPad: false,
-  dryInRain: true,
   gradeMin: '5C',
   gradeMax: '6B',
   problemCount: 2,
-  description: null,
-  objectType: 'street_wall',
-  surface: 'rubber',
-  heightM: 3,
-  lighting: true,
-  access: 'always',
+  address: 'Ланская ул., 3',
+  note: 'Резиновое покрытие у воркаут-зоны.',
   lastVisitAt: null,
   photos: [],
   problems: [
@@ -80,11 +75,12 @@ describe('SpotScreen', () => {
   it('shows spot attributes and problems with their status', async () => {
     await renderScreen({ status: 200, body: spot });
 
-    expect(await screen.findByText('Ланская ул., 3')).toBeTruthy();
+    expect(await screen.findByText('Стенка на Ланской')).toBeTruthy();
     expect(screen.getByText('5C–6B')).toBeTruthy();
     expect(screen.getByText('2 проблемы')).toBeTruthy();
-    expect(screen.getByText('Резиновое покрытие, можно без пада')).toBeTruthy();
-    expect(screen.getByText('Остаётся сухо')).toBeTruthy();
+    expect(screen.getByText('Ланская ул., 3')).toBeTruthy();
+    expect(screen.getByText('Можно без пада')).toBeTruthy();
+    expect(screen.getByText('Резиновое покрытие у воркаут-зоны.')).toBeTruthy();
     expect(screen.getByText('Боулдеринг · подтверждена · пролезли 4')).toBeTruthy();
     expect(screen.getByText('Боулдеринг · проект')).toBeTruthy();
     expect(screen.getByText('Визитов ещё не было')).toBeTruthy();
@@ -129,11 +125,11 @@ describe('SpotScreen', () => {
         </QueryClientProvider>
       </SafeAreaProvider>,
     );
-    expect(await screen.findByText('Ланская ул., 3')).toBeTruthy();
+    expect(await screen.findByText('Стенка на Ланской')).toBeTruthy();
     expect(screen.getByText('Боулдеринг · проект')).toBeTruthy();
     await waitFor(() => expect(client.getQueryState(['spot', SPOT_ID])?.status).toBe('error'));
     expect(screen.queryByText('Не удалось загрузить спот')).toBeNull();
-    expect(screen.getByText('Ланская ул., 3')).toBeTruthy();
+    expect(screen.getByText('Стенка на Ланской')).toBeTruthy();
   });
 
   it('shows not found for 404', async () => {

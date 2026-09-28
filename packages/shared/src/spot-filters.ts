@@ -16,8 +16,7 @@ export function gradesBetween(min: Grade | undefined, max: Grade | undefined): G
  * Клиент фильтрует ею споты выбранного региона, в том числе офлайн.
  */
 export function spotMatchesFilters(spot: SpotDetail, filters: SpotFilters): boolean {
-  const { discipline, gradeMin, gradeMax, dryInRain, needsPad } = filters;
-  if (dryInRain !== undefined && spot.dryInRain !== dryInRain) return false;
+  const { discipline, gradeMin, gradeMax, needsPad } = filters;
   if (needsPad !== undefined && spot.needsPad !== needsPad) return false;
   if (discipline === undefined && gradeMin === undefined && gradeMax === undefined) return true;
   const allowed = new Set<Grade>(gradesBetween(gradeMin, gradeMax));

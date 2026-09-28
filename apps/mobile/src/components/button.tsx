@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-nat
 
 import { AppText } from '@/components/app-text';
 import { Icon, type IconName } from '@/components/icon';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Colors, Radius, Size, Spacing, controlHitSlop } from '@/constants/theme';
 
 const variants = {
   /** Лайм — действие, которое оставляет след: «Пролез!», «Опубликовать». */
@@ -53,7 +53,7 @@ export function Button({
   );
 }
 
-/** Квадратная кнопка-иконка 52: на карте — бирка с тенью. */
+/** Квадратная кнопка-иконка высотой с чип (40), зона нажатия 48: на карте — бирка с тенью. */
 export function IconButton({
   icon,
   label,
@@ -72,6 +72,7 @@ export function IconButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityState={{ selected }}
+      hitSlop={controlHitSlop}
       onPress={onPress}
       style={({ pressed }) => [
         styles.iconButton,
@@ -80,7 +81,7 @@ export function IconButton({
         style,
       ]}
     >
-      <Icon name={icon} color={selected ? Colors.tag : Colors.ink} />
+      <Icon name={icon} size={20} color={selected ? Colors.tag : Colors.ink} />
     </Pressable>
   );
 }
@@ -98,8 +99,8 @@ const styles = StyleSheet.create({
   pressed: { transform: [{ scale: 0.97 }] },
   disabled: { opacity: 0.45 },
   iconButton: {
-    width: 52,
-    height: 52,
+    width: Size.control,
+    height: Size.control,
     borderRadius: Radius.tag,
     alignItems: 'center',
     justifyContent: 'center',

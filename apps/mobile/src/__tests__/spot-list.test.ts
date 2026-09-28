@@ -15,7 +15,6 @@ const spot = (id: string, lon: number, lat: number): MapSpot => ({
   location: { lon, lat },
   disciplines: ['boulder'],
   needsPad: false,
-  dryInRain: false,
   gradeMin: null,
   gradeMax: null,
   problemCount: 0,

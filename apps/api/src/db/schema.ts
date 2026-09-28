@@ -1,13 +1,10 @@
 import {
-  accessKinds,
   disciplines,
   externalPlaceKinds,
   forbiddenZoneCategories,
-  objectTypes,
   photoModerationStatuses,
   type ProblemMark,
   problemStatuses,
-  surfaces,
 } from '@prolez/shared';
 import {
   boolean,
@@ -17,7 +14,6 @@ import {
   jsonb,
   pgEnum,
   pgTable,
-  real,
   text,
   timestamp,
   uniqueIndex,
@@ -37,9 +33,6 @@ const point = customType<{ data: string; driverData: string }>({
 
 export const disciplineEnum = pgEnum('discipline', disciplines);
 export const problemStatusEnum = pgEnum('problem_status', problemStatuses);
-export const objectTypeEnum = pgEnum('object_type', objectTypes);
-export const surfaceEnum = pgEnum('surface', surfaces);
-export const accessEnum = pgEnum('access_kind', accessKinds);
 export const spotStatusEnum = pgEnum('spot_status', ['active', 'hidden']);
 export const forbiddenCategoryEnum = pgEnum('forbidden_category', forbiddenZoneCategories);
 export const externalKindEnum = pgEnum('external_kind', externalPlaceKinds);
@@ -50,15 +43,12 @@ export const spots = pgTable(
   {
     id: uuid().primaryKey().defaultRandom(),
     name: text().notNull(),
-    description: text(),
+    /** Адрес, как его написал автор спота. */
+    address: text(),
+    /** Примечание автора — свободный текст. */
+    note: text(),
     location: point().notNull(),
-    objectType: objectTypeEnum().notNull(),
-    surface: surfaceEnum().notNull(),
     needsPad: boolean().notNull(),
-    heightM: real(),
-    dryInRain: boolean().notNull().default(false),
-    lighting: boolean().notNull().default(false),
-    access: accessEnum().notNull().default('always'),
     lastVisitAt: timestamp({ withTimezone: true }),
     status: spotStatusEnum().notNull().default('active'),
     /** Демо-данные для разработки: в продакшен не выгружаются. */

@@ -10,6 +10,23 @@ import {
 export const problemStatuses = ['project', 'unconfirmed', 'confirmed'] as const;
 export type ProblemStatus = (typeof problemStatuses)[number];
 
+const statusOrder: Record<ProblemStatus, number> = { confirmed: 0, unconfirmed: 1, project: 2 };
+
+/**
+ * Порядок проблем спота везде (карточка, шторка карты): по возрастанию категории,
+ * при равной — сначала подтверждённые, потом неподтверждённые и проекты, дальше по названию.
+ */
+export function compareProblems(
+  a: { grade: Grade; status: ProblemStatus; name: string },
+  b: { grade: Grade; status: ProblemStatus; name: string },
+): number {
+  return (
+    compareGrades(a.grade, b.grade) ||
+    statusOrder[a.status] - statusOrder[b.status] ||
+    a.name.localeCompare(b.name, 'ru', { numeric: true })
+  );
+}
+
 /** Сколько очков нужно для подтверждения категории. */
 export const CONFIRMATION_THRESHOLD = 3;
 const STRONG_VOTE_POINTS = 3;

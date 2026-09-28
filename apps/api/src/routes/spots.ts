@@ -5,6 +5,7 @@ import {
   type SpotDetail,
   type SpotSummary,
   compareGrades,
+  compareProblems,
   gradesBetween,
   isGrade,
   spotDetailSchema,
@@ -26,7 +27,6 @@ type SpotRow = {
   lon: number;
   lat: number;
   needs_pad: boolean;
-  dry_in_rain: boolean;
   disciplines: Discipline[];
   grades: string[];
 };
@@ -43,14 +43,13 @@ function toSummary(row: SpotRow): SpotSummary {
     location: { lon: row.lon, lat: row.lat },
     disciplines: row.disciplines,
     needsPad: row.needs_pad,
-    dryInRain: row.dry_in_rain,
     ...gradeRange(row.grades),
     problemCount: row.grades.length,
   };
 }
 
 const spotColumns = sql`
-  s.id, s.name, ST_X(s.location) AS lon, ST_Y(s.location) AS lat, s.needs_pad, s.dry_in_rain,
+  s.id, s.name, ST_X(s.location) AS lon, ST_Y(s.location) AS lat, s.needs_pad,
   -- ::text: иначе postgres.js вернёт массив enum строкой, если соединение открылось до миграции
   COALESCE(array_agg(DISTINCT p.discipline::text) FILTER (WHERE p.id IS NOT NULL), '{}') AS disciplines,
   COALESCE(array_agg(p.grade) FILTER (WHERE p.id IS NOT NULL), '{}') AS grades`;
@@ -66,14 +65,13 @@ export function spotRoutes(db: Db): FastifyPluginAsyncZod {
         },
       },
       async (request) => {
-        const { bbox, discipline, gradeMin, gradeMax, dryInRain, needsPad } = request.query;
+        const { bbox, discipline, gradeMin, gradeMax, needsPad } = request.query;
         const [west, south, east, north] = bbox;
 
         const where: SQL[] = [
           sql`s.status = 'active'`,
           sql`s.location && ST_MakeEnvelope(${west}, ${south}, ${east}, ${north}, 4326)`,
         ];
-        if (dryInRain !== undefined) where.push(sql`s.dry_in_rain = ${dryInRain}`);
         if (needsPad !== undefined) where.push(sql`s.needs_pad = ${needsPad}`);
 
         // Дисциплина и категории — свойства проблем: спот подходит, если есть хотя бы одна такая проблема.
@@ -119,12 +117,8 @@ export function spotRoutes(db: Db): FastifyPluginAsyncZod {
 }
 
 type SpotDetailRow = SpotRow & {
-  description: string | null;
-  object_type: SpotDetail['objectType'];
-  surface: SpotDetail['surface'];
-  height_m: number | null;
-  lighting: boolean;
-  access: SpotDetail['access'];
+  address: string | null;
+  note: string | null;
   last_visit_at: Date | null;
 };
 
@@ -134,8 +128,7 @@ type SpotDetailRow = SpotRow & {
  */
 export async function loadSpotDetails(db: Db, where: SQL): Promise<SpotDetail[]> {
   const spots = await db.execute<SpotDetailRow>(sql`
-    SELECT ${spotColumns}, s.description, s.object_type, s.surface, s.height_m, s.lighting,
-      s.access, s.last_visit_at
+    SELECT ${spotColumns}, s.address, s.note, s.last_visit_at
     FROM spots s
     LEFT JOIN problems p ON p.spot_id = s.id
     WHERE s.status = 'active' AND ${where}
@@ -173,12 +166,8 @@ export async function loadSpotDetails(db: Db, where: SQL): Promise<SpotDetail[]>
 
   return spots.map((spot) => ({
     ...toSummary(spot),
-    description: spot.description,
-    objectType: spot.object_type,
-    surface: spot.surface,
-    heightM: spot.height_m,
-    lighting: spot.lighting,
-    access: spot.access,
+    address: spot.address,
+    note: spot.note,
     lastVisitAt: spot.last_visit_at ? new Date(spot.last_visit_at).toISOString() : null,
     photos: photos
       .filter((ph) => ph.spot_id === spot.id)
@@ -202,6 +191,6 @@ export async function loadSpotDetails(db: Db, where: SQL): Promise<SpotDetail[]>
           ? { photoId: p.photo_id, marks: p.marks }
           : { photoId: null, marks: [] }),
       }))
-      .sort((a, b) => compareGrades(a.grade, b.grade)),
+      .sort(compareProblems),
   }));
 }

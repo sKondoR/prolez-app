@@ -1,26 +1,17 @@
 import {
   DEFAULT_REGION_CODE,
-  type SpotFilters,
   basemapBbox,
   bboxContains,
   bboxIntersects,
   bboxWithin,
+  crags,
   findRegion,
   spotMatchesFilters,
 } from '@prolez/shared';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Alert,
-  Animated,
-  BackHandler,
-  Linking,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { Alert, Animated, BackHandler, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/app-text';
@@ -29,7 +20,6 @@ import { Chip } from '@/components/chip';
 import { Icon } from '@/components/icon';
 import { Snackbar, useSnackbar } from '@/components/snackbar';
 import { Colors, Radius, Shadow, Spacing } from '@/constants/theme';
-import { bandRangeLabel } from '@/features/map/grade-bands';
 import type { SheetMode } from '@/features/map/map-sheet';
 import { activeFilterCount, useMapStore } from '@/features/map/map-store';
 import { type MapSpot, bboxCenter, nearestSpot, spotsInView } from '@/features/map/spot-list';
@@ -62,7 +52,7 @@ export default function MapScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { bbox, zoom, filters, layers, setFilters, resetFilters, setViewport } = useMapStore();
+  const { bbox, zoom, filters, layers, resetFilters, setViewport } = useMapStore();
   const { code: regionCode, focusKey, chooseRegion } = useRegionStore();
   useRegionDetection();
   const online = useOnline();
@@ -89,12 +79,16 @@ export default function MapScreen() {
   const zonesVisible = layers.forbidden && canShowZones(bbox) && inBasemap;
   const zones = useForbiddenZones(bbox, zonesVisible);
   const external = useExternalPlaces(layers.external);
+  // Скальные районы — константа из shared (есть и без сети), скалодромы — с сервера.
+  const externalPlaces = useMemo(
+    () =>
+      layers.external ? [...(external.data ?? []).filter((p) => p.kind !== 'crag'), ...crags] : [],
+    [layers.external, external.data],
+  );
   const counts = useRegionCounts();
   const filterCount = activeFilterCount(filters);
   const snackbar = useSnackbar();
   const { locate, locating, fix, focus } = useLocate(snackbar.show, basemap);
-  const toggle = (patch: Partial<SpotFilters>) => setFilters({ ...filters, ...patch });
-  const range = bandRangeLabel(filters);
 
   // Шторка: свёрнута — счётчик, превью — выбранный спот, список — споты в кадре.
   const [sheetMode, setSheetMode] = useState<SheetMode>('collapsed');
@@ -154,7 +148,7 @@ export default function MapScreen() {
       <SpotMap
         spots={spots}
         zones={zonesVisible ? zones.data : undefined}
-        externalPlaces={layers.external ? (external.data ?? []) : []}
+        externalPlaces={externalPlaces}
         topInset={insets.top + CHIPS_BAND}
         userLocation={fix}
         focus={cameraFocus}
@@ -172,12 +166,13 @@ export default function MapScreen() {
           Alert.alert(
             place.name,
             [t(`external.${place.kind}`), place.description].filter(Boolean).join('\n'),
-            place.url
-              ? [
-                  { text: t('external.open'), onPress: () => Linking.openURL(place.url!) },
-                  { text: 'OK', style: 'cancel' },
-                ]
-              : undefined,
+            // Без своих кнопок Alert подставляет английское «OK».
+            [
+              ...(place.url
+                ? [{ text: t('external.open'), onPress: () => Linking.openURL(place.url!) }]
+                : []),
+              { text: t('external.close'), style: 'cancel' },
+            ],
           )
         }
         onViewportChange={setViewport}
@@ -194,14 +189,15 @@ export default function MapScreen() {
       />
 
       <SafeAreaView style={styles.top} pointerEvents="box-none" edges={['top']}>
-        {/* Лента обрезается краем экрана: видно, что фильтров больше. */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chips}
-          accessibilityLabel={t('map.filters')}
-        >
-          <Chip onMap icon="map" label={region.name} onPress={() => router.push('/regions')} />
+        {/* Два чипа помещаются и на 360 dp: остальные фильтры — на экране фильтров. */}
+        <View style={styles.chips}>
+          <Chip
+            onMap
+            shrink
+            icon="map"
+            label={region.name}
+            onPress={() => router.push('/regions')}
+          />
           <Chip
             onMap
             icon="sliders"
@@ -209,29 +205,7 @@ export default function MapScreen() {
             badge={filterCount}
             onPress={() => router.push('/filters')}
           />
-          <Chip
-            onMap
-            label={t('discipline.boulder')}
-            selected={filters.discipline === 'boulder'}
-            onPress={() =>
-              toggle({ discipline: filters.discipline === 'boulder' ? undefined : 'boulder' })
-            }
-          />
-          {range && <Chip onMap selected label={range} onPress={() => router.push('/filters')} />}
-          <Chip
-            onMap
-            icon="umbrella"
-            label={t('filters.dryInRain')}
-            selected={filters.dryInRain === true}
-            onPress={() => toggle({ dryInRain: filters.dryInRain ? undefined : true })}
-          />
-          <Chip
-            onMap
-            label={t('map.noPad')}
-            selected={filters.needsPad === false}
-            onPress={() => toggle({ needsPad: filters.needsPad === false ? undefined : false })}
-          />
-        </ScrollView>
+        </View>
 
         {!online && (
           <View style={styles.pill}>
@@ -331,10 +305,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.ground },
   top: { position: 'absolute', top: 0, left: 0, right: 0 },
   chips: {
+    flexDirection: 'row',
     gap: Spacing.two,
-    paddingHorizontal: Spacing.three,
+    paddingHorizontal: Spacing.four,
     paddingTop: Spacing.two,
-    // Место под тень чипов, иначе ScrollView её обрежет.
     paddingBottom: Spacing.four - Spacing.half,
   },
   pill: {
@@ -343,7 +317,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.two,
     minHeight: 36,
-    marginHorizontal: Spacing.three,
+    marginHorizontal: Spacing.four,
     marginBottom: Spacing.two,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
@@ -371,5 +345,5 @@ const styles = StyleSheet.create({
     borderRadius: Radius.small,
     backgroundColor: Colors.accent,
   },
-  fabs: { position: 'absolute', right: Spacing.three, bottom: Spacing.three, gap: Spacing.two },
+  fabs: { position: 'absolute', right: Spacing.four, bottom: Spacing.three, gap: Spacing.two },
 });

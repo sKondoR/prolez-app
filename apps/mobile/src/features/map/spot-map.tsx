@@ -3,6 +3,7 @@ import {
   type CameraRef,
   GeoJSONSource,
   type GeoJSONSourceRef,
+  Images,
   Layer,
   Map,
   type MapRef,
@@ -13,14 +14,16 @@ import {
   type ExternalPlace,
   type SpotSummary,
   bboxContains,
+  externalPlaceKinds,
   regions,
 } from '@prolez/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { Colors, Spacing } from '@/constants/theme';
 import regionShapes from '@/features/regions/region-shapes.json';
 
+import { externalMarkImage, externalMarks } from './external-marks';
 import { installMapLogHandler } from './map-logs';
 import { mapColors, useMapStyle } from './map-style';
 
@@ -63,6 +66,10 @@ const NO_PADDING = { top: 0, right: 0, bottom: 0, left: 0 };
 const SPOT_LABEL_MIN_ZOOM = 15;
 /** Зона нажатия метки — 48 dp, хотя сама метка 24. */
 const SPOT_HITBOX = { top: 24, right: 24, bottom: 24, left: 24 };
+
+const externalImages = Object.fromEntries(
+  externalPlaceKinds.map((kind) => [externalMarkImage(kind), externalMarks[kind]]),
+);
 
 export interface UserLocationFix {
   lon: number;
@@ -192,7 +199,7 @@ export function SpotMap({
       onPress={() => onMapPress?.()}
       mapStyle={mapStyle}
       compass
-      compassPosition={{ top: topInset, right: 12 }}
+      compassPosition={{ top: topInset, right: Spacing.four }}
       attributionPosition={{ bottom: bottomInset + 8, left: 8 }}
       logo={false}
       onRegionDidChange={({ nativeEvent }) =>
@@ -317,9 +324,12 @@ export function SpotMap({
         />
       </GeoJSONSource>
 
+      <Images images={externalImages} />
+
       <GeoJSONSource
         id="external-places"
         data={externalFeatures}
+        hitbox={SPOT_HITBOX}
         onPress={(event) => {
           event.stopPropagation();
           const id = event.nativeEvent.features[0]?.properties?.id;
@@ -328,13 +338,12 @@ export function SpotMap({
         }}
       >
         <Layer
-          type="circle"
-          id="external-circle"
-          paint={{
-            'circle-radius': 10,
-            'circle-color': mapColors.ink,
-            'circle-stroke-color': mapColors.tag,
-            'circle-stroke-width': 2,
+          type="symbol"
+          id="external-mark"
+          layout={{
+            'icon-image': ['concat', 'external-', ['get', 'kind']],
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
           }}
         />
         <Layer
@@ -345,12 +354,12 @@ export function SpotMap({
             'text-field': ['get', 'name'],
             'text-font': ['Noto Sans Bold'],
             'text-size': 11,
-            'text-offset': [0, 1.5],
+            'text-offset': [0, 1.7],
             'text-anchor': 'top',
             'text-max-width': 9,
           }}
           paint={{
-            'text-color': mapColors.ink,
+            'text-color': mapColors.externalGrey,
             'text-halo-color': mapColors.land,
             'text-halo-width': 1.5,
           }}

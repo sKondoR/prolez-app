@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/app-text';
 import { Icon, type IconName } from '@/components/icon';
-import { Colors, Radius, Shadow, Spacing } from '@/constants/theme';
+import { Colors, Radius, Shadow, Size, Spacing, controlHitSlop } from '@/constants/theme';
 
 interface ChipProps {
   label: string;
@@ -13,9 +13,19 @@ interface ChipProps {
   badge?: number;
   /** Чип поверх карты: тень и лаймовое выбранное состояние, как у меток спотов. */
   onMap?: boolean;
+  /** Чип сжимается в ряду, длинная подпись обрезается многоточием (название региона). */
+  shrink?: boolean;
 }
 
-export function Chip({ label, selected = false, onPress, icon, badge, onMap = false }: ChipProps) {
+export function Chip({
+  label,
+  selected = false,
+  onPress,
+  icon,
+  badge,
+  onMap = false,
+  shrink = false,
+}: ChipProps) {
   const selectedBg = onMap ? Colors.accent : Colors.ink;
   const fg = selected && !onMap ? Colors.tag : Colors.ink;
 
@@ -24,8 +34,10 @@ export function Chip({ label, selected = false, onPress, icon, badge, onMap = fa
       accessibilityRole="button"
       accessibilityState={{ selected }}
       onPress={onPress}
+      hitSlop={controlHitSlop}
       style={({ pressed }) => [
         styles.chip,
+        shrink && styles.shrink,
         onMap && Shadow.chip,
         selected ? { backgroundColor: selectedBg } : styles.idle,
         !onMap && !selected && styles.edge,
@@ -33,7 +45,11 @@ export function Chip({ label, selected = false, onPress, icon, badge, onMap = fa
       ]}
     >
       {icon && <Icon name={icon} size={16} color={fg} />}
-      <AppText variant="label" style={[styles.label, { color: fg }]}>
+      <AppText
+        variant="label"
+        numberOfLines={1}
+        style={[styles.label, shrink && styles.shrink, { color: fg }]}
+      >
         {label}
       </AppText>
       {badge !== undefined && badge > 0 && (
@@ -52,10 +68,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
-    height: 40,
+    height: Size.control,
     paddingHorizontal: 14,
     borderRadius: Radius.tag,
   },
+  shrink: { flexShrink: 1, minWidth: 0 },
   idle: { backgroundColor: Colors.tag },
   edge: { borderWidth: 1.5, borderColor: Colors.chipEdge },
   pressed: { transform: [{ scale: 0.97 }] },

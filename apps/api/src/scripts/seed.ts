@@ -11,8 +11,8 @@ import {
   type Discipline,
   type Grade,
   type ProblemMark,
-  type SpotDetail,
   compareGrades,
+  crags,
   grades,
   problemStatus,
 } from '@prolez/shared';
@@ -38,73 +38,48 @@ const pick = <T>(list: readonly T[]): T => list[Math.floor(rand() * list.length)
 
 interface SeedSpot {
   name: string;
-  description: string | null;
+  address: string | null;
+  note: string | null;
   lon: number;
   lat: number;
-  objectType: SpotDetail['objectType'];
-  surface: SpotDetail['surface'];
   needsPad: boolean;
-  heightM: number;
-  dryInRain: boolean;
-  lighting: boolean;
-  access: SpotDetail['access'];
 }
 
-const researchNote =
-  'Из исследования (IDEA.md). Координаты приблизительные, атрибуты и трассы — демо.';
+// Реальные места из исследования: координаты приблизительные, трассы — демо.
+const researchNote = 'Координаты приблизительные, трассы — пример.';
 
 const researchSpots: SeedSpot[] = [
   {
-    name: 'Ланская ул., 3',
-    description: `Уличная стенка для боулдеринга. ${researchNote}`,
+    name: 'Стенка на Ланской',
+    address: 'Ланская ул., 3',
+    note: `Уличная стенка для боулдеринга, под ней резиновое покрытие. ${researchNote}`,
     lon: 30.32174,
     lat: 59.99864,
-    objectType: 'street_wall',
-    surface: 'rubber',
     needsPad: false,
-    heightM: 3,
-    dryInRain: false,
-    lighting: true,
-    access: 'always',
   },
   {
-    name: 'Набережная Охты (ш. Революции, 63)',
-    description: `Уличная стенка для боулдеринга. ${researchNote}`,
+    name: 'Набережная Охты',
+    address: 'шоссе Революции, 63',
+    note: `Уличная стенка для боулдеринга, под ней песок. ${researchNote}`,
     lon: 30.4579,
     lat: 59.96059,
-    objectType: 'street_wall',
-    surface: 'sand',
     needsPad: false,
-    heightM: 3.5,
-    dryInRain: false,
-    lighting: false,
-    access: 'always',
   },
   {
-    name: 'Воркаут-зона на пр. Королёва',
-    description: `Стенка в воркаут-зоне. ${researchNote}`,
+    name: 'Воркаут-зона на Королёва',
+    address: 'пр. Королёва',
+    note: `Стенка в воркаут-зоне, под ней резиновое покрытие. ${researchNote}`,
     lon: 30.26304,
     lat: 60.0135,
-    objectType: 'street_wall',
-    surface: 'rubber',
     needsPad: false,
-    heightM: 2.5,
-    dryInRain: false,
-    lighting: true,
-    access: 'always',
   },
   {
-    name: 'Кронштадт, «Остров фортов»',
-    description: `Не проверено. ${researchNote}`,
+    name: 'Остров фортов',
+    address: 'Кронштадт, парк «Остров фортов»',
+    note: `Стенка не проверена, днём парк открыт. ${researchNote}`,
     lon: 29.74893,
     lat: 59.99321,
-    objectType: 'street_wall',
-    surface: 'rubber',
     needsPad: false,
-    heightM: 3,
-    dryInRain: false,
-    lighting: false,
-    access: 'daytime',
   },
 ];
 
@@ -125,20 +100,13 @@ const DEMO_SPOT_COUNT = 20;
 function demoCandidates(count: number): SeedSpot[] {
   return Array.from({ length: count }, () => {
     const [district, lon, lat] = pick(districts);
-    const objectType = pick(['wall', 'low_wall', 'parapet', 'retaining_wall'] as const);
-    const surface = pick(['asphalt', 'tiles', 'concrete', 'ground', 'grass'] as const);
     return {
       name: `Демо-спот {n} (${district})`,
-      description: 'Демо-данные для разработки.',
+      address: null,
+      note: 'Демо-данные для разработки.',
       lon: lon + (rand() - 0.5) * 0.04,
       lat: lat + (rand() - 0.5) * 0.02,
-      objectType,
-      surface,
-      needsPad: surface !== 'grass' && surface !== 'ground',
-      heightM: Math.round((2 + rand() * 4) * 10) / 10,
-      dryInRain: rand() < 0.25,
-      lighting: rand() < 0.5,
-      access: pick(['always', 'always', 'gated_yard', 'daytime'] as const),
+      needsPad: rand() < 0.6,
     };
   });
 }
@@ -174,20 +142,14 @@ const externalPlaces = [
     lat: 59.96992,
     description: 'Платная летняя уличная стенка, пр. Динамо, 44Б. Координаты приблизительные.',
   },
-  {
-    kind: 'crag' as const,
-    name: 'Треугольное озеро',
-    lon: 29.03815,
-    lat: 60.81495,
-    description: 'Загородный скальный район, Выборгский район ЛО.',
-  },
-  {
-    kind: 'crag' as const,
-    name: 'Приозерск',
-    lon: 30.12485,
-    lat: 61.03853,
-    description: 'Загородные скальные районы в окрестностях Приозерска.',
-  },
+  // Скальные районы — общая константа из shared: приложение показывает её и без сети.
+  ...crags.map((c) => ({
+    kind: c.kind,
+    name: c.name,
+    lon: c.location.lon,
+    lat: c.location.lat,
+    description: c.description,
+  })),
 ];
 
 // Демо-фото стены с разметкой (фото — Pexels, трассы выдуманы). Координаты меток — доли кадра.
@@ -288,12 +250,10 @@ async function main() {
         ? candidate
         : { ...candidate, name: candidate.name.replace('{n}', String(++demoInserted)) };
       const [row] = await tx<{ id: string }[]>`
-        INSERT INTO spots (name, description, location, object_type, surface, needs_pad, height_m,
-          dry_in_rain, lighting, access, last_visit_at, is_demo)
-        VALUES (${spot.name}, ${spot.description},
-          ST_SetSRID(ST_MakePoint(${spot.lon}, ${spot.lat}), 4326), ${spot.objectType},
-          ${spot.surface}, ${spot.needsPad}, ${spot.heightM}, ${spot.dryInRain}, ${spot.lighting},
-          ${spot.access}, now() - ${`${Math.floor(rand() * 60)} days`}::interval, true)
+        INSERT INTO spots (name, address, note, location, needs_pad, last_visit_at, is_demo)
+        VALUES (${spot.name}, ${spot.address}, ${spot.note},
+          ST_SetSRID(ST_MakePoint(${spot.lon}, ${spot.lat}), 4326), ${spot.needsPad},
+          now() - ${`${Math.floor(rand() * 60)} days`}::interval, true)
         RETURNING id`;
       for (const p of demoProblems(index)) {
         await tx`
@@ -308,11 +268,11 @@ async function main() {
     if (photo) {
       const [wallSpot] = await tx<{ id: string }[]>`
         SELECT id FROM spots
-        WHERE is_demo AND name LIKE 'Демо-спот%' AND object_type IN ('wall', 'retaining_wall')
+        WHERE is_demo AND name LIKE 'Демо-спот%'
         ORDER BY created_at, name LIMIT 1`;
       if (wallSpot) {
         await tx`DELETE FROM problems WHERE spot_id = ${wallSpot.id}`;
-        await tx`UPDATE spots SET needs_pad = true, surface = 'asphalt' WHERE id = ${wallSpot.id}`;
+        await tx`UPDATE spots SET needs_pad = true WHERE id = ${wallSpot.id}`;
         const [ph] = await tx<{ id: string }[]>`
           INSERT INTO spot_photos (spot_id, s3_key, width, height, credit, moderation)
           VALUES (${wallSpot.id}, ${DEMO_PHOTO_KEY}, ${photo.width}, ${photo.height},

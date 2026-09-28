@@ -20,6 +20,8 @@ export const Colors = {
   /** Тот же розовый для иконок и текста на светлом: 5.1:1 на бирке. */
   forbiddenInk: '#C81E7E',
   switchOff: '#C9CCC8',
+  /** Метки внешнего слоя (скалодромы, скалы): мягче графита спотов, 6.4:1 на бирке. */
+  externalGrey: '#555A57',
   /** Бетонная плита и шов между плитами — подложки иллюстраций. */
   concrete: '#A5AAA6',
   seam: '#7A7F7B',
@@ -45,6 +47,13 @@ export const Spacing = {
   five: 24,
   six: 32,
 } as const;
+
+/**
+ * Высота компактных элементов управления — чипов и квадратных кнопок-иконок. Зона нажатия
+ * у них всё равно 48 dp: недостающее добирает `hitSlop` (`controlHitSlop`).
+ */
+export const Size = { control: 40, touch: 48 } as const;
+export const controlHitSlop = (Size.touch - Size.control) / 2;
 
 export const Fonts = {
   display: 'Unbounded_800ExtraBold',
